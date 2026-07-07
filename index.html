@@ -1,79 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive Layer 2/3 Learning Tool</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <header>
-    <h1>Interactive Layer 2 and Layer 3 Learning Tool</h1>
-    <p>Observe MAC/IP addressing, encapsulation, ARP, switching, and routing.</p>
-  </header>
-
-  <main>
-    <section class="controls" aria-label="Playback controls">
-      <button id="startBtn">Start</button>
-      <button id="pauseBtn">Pause</button>
-      <button id="resumeBtn">Resume</button>
-      <button id="stepBtn">Step forward</button>
-      <button id="resetBtn">Reset</button>
-      <label for="speedSelect">Speed</label>
-      <select id="speedSelect">
-        <option value="slow">Slow</option>
-        <option value="normal" selected>Normal</option>
-        <option value="fast">Fast</option>
-      </select>
-      <button id="prevLessonBtn">Previous lesson</button>
-      <button id="nextLessonBtn">Next lesson</button>
-    </section>
-
-    <section class="content-grid">
-      <section class="visualization" aria-label="Network visualization">
-        <h2>Network</h2>
-        <div id="networkCanvas" class="network-canvas" role="img" aria-label="Network topology and moving frames">
-          <svg id="linkLayer" class="link-layer" viewBox="0 0 900 520" preserveAspectRatio="none"></svg>
-          <div id="entitiesLayer" class="entities-layer"></div>
-          <div id="tokenLayer" class="token-layer" aria-live="polite"></div>
-        </div>
-      </section>
-
-      <section class="sidebar">
-        <section class="panel explanation-panel" aria-live="polite">
-          <h2>Explanation</h2>
-          <p><strong>Lesson:</strong> <span id="lessonTitle">-</span></p>
-          <p><strong>Step:</strong> <span id="stepTitle">-</span></p>
-          <p id="stepText">Press Start to begin the lesson sequence.</p>
-        </section>
-
-        <section class="panel tables-panel">
-          <h2>Tables</h2>
-          <label for="tableDeviceSelect">Select device</label>
-          <select id="tableDeviceSelect"></select>
-          <div class="table-wrap">
-            <h3>ARP Table</h3>
-            <table id="arpTable">
-              <thead>
-                <tr><th>IP Address</th><th>MAC Address</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="table-wrap">
-            <h3>Routing Table</h3>
-            <table id="routingTable">
-              <thead>
-                <tr><th>Destination Network</th><th>Next Hop</th><th>Outgoing Interface</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </section>
-  </main>
-
-  <script src="script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive L2 / L3 Learning Tool</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
