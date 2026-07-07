@@ -52,8 +52,11 @@ export function App() {
     setSpeed(s);
   }, []);
 
-  /** Cancels any in-flight PDU animation and resolves its Promise. */
-  const cancelPdu = useCallback(() => {
+  /**
+   * Aborts any in-flight PDU animation: resolves its waiting Promise so the
+   * step engine can exit cleanly, then removes the PDU from the canvas.
+   */
+  const cancelActivePdu = useCallback(() => {
     if (pduResolveRef.current) {
       pduResolveRef.current();
       pduResolveRef.current = null;
@@ -63,9 +66,9 @@ export function App() {
 
   const cancelAll = useCallback(() => {
     cancelRef.current = true;
-    cancelPdu();
+    cancelActivePdu();
     setIsPlaying(false);
-  }, [cancelPdu]);
+  }, [cancelActivePdu]);
 
   /** Plays a single PDU animation and waits for it to finish. */
   const runPdu = useCallback((spec: PduSpec): Promise<void> => {

@@ -25,6 +25,14 @@ export function PduToken({ spec, positions, segmentMs, onDone }: Props) {
 
     const segDur = segmentMs / 1000;
 
+    /*
+     * Intentionally empty dependency array: waypoints, segmentMs, and onDone
+     * are captured once at mount time.  segmentMs comes from speedRef.current
+     * evaluated when the ActivePdu was created, so the chosen speed is fixed
+     * for the lifetime of this animation; changing speed mid-flight takes
+     * effect on the *next* PDU.
+     */
+
     const run = async () => {
       // Fade in at starting position
       await animate(scope.current, { opacity: 1, scale: 1 }, { duration: 0.28 });
