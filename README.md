@@ -10,7 +10,7 @@ A static HTML/CSS/JavaScript learning tool for visualizing:
 
 ## Run locally
 
-Open `/home/runner/work/InteractiveLearnNetL2L3/InteractiveLearnNetL2L3/index.html` in a browser, or serve the folder as static content.
+Open `index.html` in a browser, or serve the folder as static content.
 
 ## Controls
 

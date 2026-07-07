@@ -321,6 +321,10 @@ async function animateToken(pathIds, label, multiplier = 1) {
   tokenLayer.appendChild(token);
 
   const points = pathIds.map(getNodeCenter);
+  if (points.length === 0) {
+    token.remove();
+    return;
+  }
   const segmentDuration = getSpeedDuration(multiplier) / Math.max(points.length - 1, 1);
 
   token.style.left = `${points[0].x}px`;
@@ -478,7 +482,9 @@ const steps = [
         ['pc2', 'pc3'],
         ['pc3', 'pc1']
       ];
-      [arpRequester, arpTarget] = pairPool[Math.floor(Math.random() * pairPool.length)];
+      const selectedPair = pairPool[Math.floor(Math.random() * pairPool.length)];
+      arpRequester = selectedPair[0];
+      arpTarget = selectedPair[1];
     },
     animation: async () => {
       await animateToken([arpRequester, 'sw1', arpTarget], 'ARP Request: Who has this IP? Reply to me.', 0.9);
