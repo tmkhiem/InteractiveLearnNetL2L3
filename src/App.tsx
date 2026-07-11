@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import { endpoints } from './model/network'
+import { scenarios } from './model/scenario'
 import { Lesson } from './components/Lesson'
 
 function otherEndpoint(exclude: string): string {
@@ -8,9 +9,12 @@ function otherEndpoint(exclude: string): string {
 }
 
 function App() {
+  const [scenarioId, setScenarioId] = useState(scenarios[0].id)
   const [srcId, setSrcId] = useState('pc-a')
   const [dstId, setDstId] = useState('pc-b')
   const [revealed, setRevealed] = useState(false)
+
+  const scenarioDef = scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
 
   // Fade the topology in on first paint.
   useEffect(() => {
@@ -30,17 +34,29 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <p className="scenario-label">Scenario · {scenarioDef.name}</p>
         <h1>How a frame carries a packet across a Layer 2 network</h1>
-        <p>
-          A <span className="chip chip-frame">frame</span> is a Layer 2 envelope
-          addressed by <b>MAC</b>. A{' '}
-          <span className="chip chip-packet">packet</span> is a Layer 3 message
-          addressed by <b>IP</b>. The packet rides <i>inside</i> the frame.
-        </p>
+        {scenarioDef.showLayer3 ? (
+          <p>
+            A <span className="chip chip-frame">frame</span> is a Layer 2
+            envelope addressed by <b>MAC</b>. A{' '}
+            <span className="chip chip-packet">packet</span> is a Layer 3
+            message addressed by <b>IP</b>. The packet rides <i>inside</i> the
+            frame.
+          </p>
+        ) : (
+          <p>
+            A <span className="chip chip-frame">frame</span> is a Layer 2
+            envelope addressed by <b>MAC</b>. This view deals only with MAC
+            addresses — Layer 3 (IP) comes later.
+          </p>
+        )}
       </header>
 
       <Lesson
-        key={`${srcId}-${dstId}`}
+        key={`${scenarioId}-${srcId}-${dstId}`}
+        scenarioId={scenarioId}
+        onScenario={setScenarioId}
         srcId={srcId}
         dstId={dstId}
         onSrc={handleSrc}

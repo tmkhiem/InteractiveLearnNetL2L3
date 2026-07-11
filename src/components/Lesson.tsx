@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { primaryNic } from '../model/network'
-import { buildL2Scenario } from '../model/scenario'
+import { scenarios } from '../model/scenario'
 import { usePlayer } from '../hooks/usePlayer'
 import { Stage } from './Stage'
 import { NarrationPanel } from './NarrationPanel'
 import { Controls } from './Controls'
 
 interface LessonProps {
+  scenarioId: string
+  onScenario: (id: string) => void
   srcId: string
   dstId: string
   onSrc: (id: string) => void
@@ -16,12 +18,26 @@ interface LessonProps {
 }
 
 /**
- * One run of the Layer 2 delivery lesson. Mounted with a key of
- * `${srcId}-${dstId}`, so picking a new sender/receiver remounts it and the
- * player state resets cleanly — no manual reset logic required.
+ * One run of a named scenario. Mounted with a key of
+ * `${scenarioId}-${srcId}-${dstId}`, so picking a new scenario or
+ * sender/receiver remounts it and the player state resets cleanly — no
+ * manual reset logic required.
  */
-export function Lesson({ srcId, dstId, onSrc, onDst, revealed }: LessonProps) {
-  const scenario = useMemo(() => buildL2Scenario(srcId, dstId), [srcId, dstId])
+export function Lesson({
+  scenarioId,
+  onScenario,
+  srcId,
+  dstId,
+  onSrc,
+  onDst,
+  revealed,
+}: LessonProps) {
+  const scenarioDef =
+    scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
+  const scenario = useMemo(
+    () => scenarioDef.build(srcId, dstId),
+    [scenarioDef, srcId, dstId],
+  )
   const player = usePlayer(scenario)
 
   const currentStep = player.index >= 0 ? scenario.steps[player.index] : null
@@ -45,6 +61,7 @@ export function Lesson({ srcId, dstId, onSrc, onDst, revealed }: LessonProps) {
           sprite={currentStep?.sprite ?? null}
           travelMs={player.currentDuration || 600}
           sliding={currentStep?.kind === 'travel'}
+          showLayer3={scenarioDef.showLayer3}
           frameLabels={frameLabels}
           revealed={revealed}
         />
@@ -57,6 +74,8 @@ export function Lesson({ srcId, dstId, onSrc, onDst, revealed }: LessonProps) {
       />
 
       <Controls
+        scenarioId={scenarioId}
+        onScenario={onScenario}
         srcId={srcId}
         dstId={dstId}
         onSrc={onSrc}

@@ -8,21 +8,26 @@ interface FrameSpriteProps {
   travelMs: number
   /** True only during a 'travel' step — enables the left/top slide. */
   sliding: boolean
+  /** Whether to show the nested green L3 packet, or a plain payload. */
+  showLayer3: boolean
   fromMac: string
   toMac: string
-  fromIp: string
-  toIp: string
+  fromIp?: string
+  toIp?: string
 }
 
 /**
- * The single animated box. The green Layer 3 packet is always in the DOM; the
- * yellow Layer 2 frame wraps around it and is revealed/hidden via CSS so that
- * encapsulation and decapsulation read as one shell opening and closing.
+ * The single animated box: a yellow Layer 2 frame, always addressed by MAC.
+ * When `showLayer3` is true, it wraps a green Layer 3 packet (addressed by
+ * IP); wrapping/unwrapping is revealed via CSS so encapsulation and
+ * decapsulation read as one shell opening and closing. When false, the frame
+ * carries a plain "Payload" placeholder instead — no IP involved.
  */
 export function FrameSprite({
   sprite,
   travelMs,
   sliding,
+  showLayer3,
   fromMac,
   toMac,
   fromIp,
@@ -79,19 +84,25 @@ export function FrameSprite({
           </span>
         </div>
 
-        {/* Green Layer 3 packet — the payload inside. */}
-        <div className="l3-packet">
-          <div className="box-header">
-            <span className="box-tag">L3 PACKET</span>
-            <span className="addr">
-              FROM <b>{fromIp}</b>
-            </span>
-            <span className="addr">
-              TO <b>{toIp}</b>
-            </span>
+        {showLayer3 ? (
+          // Green Layer 3 packet — the payload inside.
+          <div className="l3-packet">
+            <div className="box-header">
+              <span className="box-tag">L3 PACKET</span>
+              <span className="addr">
+                FROM <b>{fromIp}</b>
+              </span>
+              <span className="addr">
+                TO <b>{toIp}</b>
+              </span>
+            </div>
+            <div className="packet-payload">App data</div>
           </div>
-          <div className="packet-payload">App data</div>
-        </div>
+        ) : (
+          // No packet at this point in the storyboard — just an opaque
+          // payload, addressed only by the frame's MAC headers above.
+          <div className="frame-payload">Payload</div>
+        )}
       </div>
     </div>
   )

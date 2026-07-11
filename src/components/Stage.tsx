@@ -16,6 +16,8 @@ interface StageProps {
   travelMs: number
   /** True only during a 'travel' step — enables the sprite's slide. */
   sliding: boolean
+  /** Whether the active scenario surfaces IP addressing at all. */
+  showLayer3: boolean
   frameLabels: { fromMac: string; toMac: string; fromIp: string; toIp: string }
   /** Fade the whole topology in on mount. */
   revealed: boolean
@@ -28,6 +30,7 @@ export function Stage({
   sprite,
   travelMs,
   sliding,
+  showLayer3,
   frameLabels,
   revealed,
 }: StageProps) {
@@ -85,7 +88,9 @@ export function Stage({
         />
       </svg>
 
-      <div className="lan-tag">Local network · {topology.localNetwork}</div>
+      <div className="lan-tag">
+        Local network{showLayer3 ? ` · ${topology.localNetwork}` : ''}
+      </div>
 
       <div
         className="cloud"
@@ -106,6 +111,7 @@ export function Stage({
             device={device}
             role={role}
             active={device.id === activeDevice}
+            showLayer3={showLayer3}
           />
         )
       })}
@@ -114,6 +120,7 @@ export function Stage({
         sprite={sprite}
         travelMs={travelMs}
         sliding={sliding}
+        showLayer3={showLayer3}
         {...frameLabels}
       />
     </div>

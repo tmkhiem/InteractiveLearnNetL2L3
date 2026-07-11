@@ -1,7 +1,10 @@
 import { endpoints } from '../model/network'
+import { scenarios } from '../model/scenario'
 import type { Player, Speed } from '../hooks/usePlayer'
 
 interface ControlsProps {
+  scenarioId: string
+  onScenario: (id: string) => void
   srcId: string
   dstId: string
   onSrc: (id: string) => void
@@ -11,10 +14,32 @@ interface ControlsProps {
 
 const SPEEDS: Speed[] = ['slow', 'normal', 'fast']
 
-export function Controls({ srcId, dstId, onSrc, onDst, player }: ControlsProps) {
+export function Controls({
+  scenarioId,
+  onScenario,
+  srcId,
+  dstId,
+  onSrc,
+  onDst,
+  player,
+}: ControlsProps) {
   return (
     <div className="controls">
       <div className="picker-group">
+        <label className="picker">
+          <span>Scenario</span>
+          <select
+            value={scenarioId}
+            onChange={(e) => onScenario(e.target.value)}
+          >
+            {scenarios.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="picker">
           <span>Sender</span>
           <select value={srcId} onChange={(e) => onSrc(e.target.value)}>

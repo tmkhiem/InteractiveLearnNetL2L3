@@ -9,6 +9,15 @@
   gap: 16px;
 }
 
+.app-header p.scenario-label {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .app-header h1 {
   margin: 0 0 6px;
   font-size: 1.5rem;
@@ -332,7 +341,7 @@
   animation: pulse 0.9s ease-in-out infinite;
 }
 
-/* Green Layer 3 packet — always present. */
+/* Green Layer 3 packet — shown only when the scenario surfaces IP. */
 .l3-packet {
   border-radius: 9px;
   border: 2px solid var(--packet-green-border);
@@ -353,6 +362,18 @@
   font-size: 0.72rem;
   color: var(--packet-green-ink);
   background: rgba(255, 255, 255, 0.55);
+  border-radius: 5px;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+/* Plain payload placeholder — pure-L2 scenarios (no packet, no IP). */
+.frame-payload {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--frame-yellow-ink);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed var(--frame-yellow-border);
   border-radius: 5px;
   padding: 3px 8px;
   text-align: center;

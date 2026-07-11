@@ -7,6 +7,8 @@ interface DeviceCardProps {
   role: 'src' | 'dst' | null
   /** True when the step engine is emphasizing this device. */
   active: boolean
+  /** Whether the active scenario surfaces IP addressing at all. */
+  showLayer3: boolean
 }
 
 function Icon({ kind }: { kind: Device['kind'] }) {
@@ -34,7 +36,12 @@ function Icon({ kind }: { kind: Device['kind'] }) {
   )
 }
 
-export function DeviceCard({ device, role, active }: DeviceCardProps) {
+export function DeviceCard({
+  device,
+  role,
+  active,
+  showLayer3,
+}: DeviceCardProps) {
   const left = `${(device.pos.x / STAGE_WIDTH) * 100}%`
   const top = `${(device.pos.y / STAGE_HEIGHT) * 100}%`
 
@@ -60,10 +67,12 @@ export function DeviceCard({ device, role, active }: DeviceCardProps) {
             <dt>MAC</dt>
             <dd className="mac">{device.nics[0].mac}</dd>
           </div>
-          <div>
-            <dt>IP</dt>
-            <dd className="ip">{device.nics[0].ip}</dd>
-          </div>
+          {showLayer3 && (
+            <div>
+              <dt>IP</dt>
+              <dd className="ip">{device.nics[0].ip}</dd>
+            </div>
+          )}
         </dl>
       )}
 
@@ -77,7 +86,7 @@ export function DeviceCard({ device, role, active }: DeviceCardProps) {
             <div key={nic.id} className={nic.external ? 'nic-wan' : ''}>
               <dt>{nic.ifname}</dt>
               <dd className="mac">{nic.mac}</dd>
-              <dd className="ip">{nic.ip}</dd>
+              {showLayer3 && <dd className="ip">{nic.ip}</dd>}
             </div>
           ))}
         </dl>

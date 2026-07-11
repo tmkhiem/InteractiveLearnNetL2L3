@@ -50,6 +50,19 @@ export interface Scenario {
   steps: Step[]
 }
 
+/**
+ * A named, reusable scenario: metadata plus the function that builds its
+ * step list for a given sender/receiver pair. Future lessons (ARP, routing)
+ * register alongside these in this same shape.
+ */
+export interface ScenarioDefinition {
+  id: string
+  name: string
+  /** Whether this scenario surfaces IP addressing (Layer 3) at all. */
+  showLayer3: boolean
+  build: (srcId: string, dstId: string) => Scenario
+}
+
 const CREATE_MS = 1400
 const ENCAP_MS = 1400
 const TRAVEL_MS = 1800
@@ -57,7 +70,84 @@ const INSPECT_MS = 1800
 const DECAP_MS = 1400
 const HOLD_MS = 1600
 
-export function buildL2Scenario(srcId: string, dstId: string): Scenario {
+// --- Basic L2 transfer -------------------------------------------------------
+// Pure Layer 2: a frame carrying an opaque payload, addressed only by MAC.
+// No packet, no IP, no encapsulation/decapsulation — Layer 3 hasn't been
+// introduced yet at this point in the storyboard.
+
+function buildBasicL2Transfer(srcId: string, dstId: string): Scenario {
+  const src = getDevice(srcId)
+  const dst = getDevice(dstId)
+  const srcNic = primaryNic(srcId)
+  const dstNic = primaryNic(dstId)
+
+  const steps: Step[] = [
+    {
+      kind: 'create',
+      narration: `${src.name} wants to send data to ${dst.name}.`,
+      detail: `It builds a Layer 2 frame: FROM ${srcNic.mac} → TO ${dstNic.mac}.`,
+      sprite: { at: srcId, phase: 'frame' },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves ${src.name} and travels to the switch SW1.`,
+      detail: 'It carries a payload, addressed only by MAC.',
+      sprite: { at: 'sw1', phase: 'frame' },
+      activeDevice: 'sw1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: 'SW1 reads only the destination MAC address.',
+      detail: `It sees TO ${dstNic.mac} and forwards toward ${dst.name}. A switch never needs to know what's inside the frame.`,
+      sprite: { at: 'sw1', phase: 'frame', highlightTo: true },
+      activeDevice: 'sw1',
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `SW1 forwards the frame to ${dst.name}.`,
+      detail: 'Same frame, same payload — delivered as one unit.',
+      sprite: { at: dstId, phase: 'frame' },
+      activeDevice: dstId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${dst.name} receives the frame. Delivery complete.`,
+      detail: `The destination MAC matched (${dstNic.mac}), so ${dst.name} accepts the frame and reads its payload.`,
+      sprite: { at: dstId, phase: 'frame' },
+      activeDevice: dstId,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'callout',
+      narration: 'The frame never left the local network.',
+      detail:
+        'Every hop stayed on the same local network. Layer 2 frames only travel within one network — and the switch forwarded it using the MAC address alone.',
+      realization: true,
+      sprite: null,
+      duration: HOLD_MS,
+    },
+  ]
+
+  return { srcId, dstId, steps }
+}
+
+export const basicL2Transfer: ScenarioDefinition = {
+  id: 'basic-l2-transfer',
+  name: 'Basic L2 transfer',
+  showLayer3: false,
+  build: buildBasicL2Transfer,
+}
+
+// --- Basic L3 transfer -------------------------------------------------------
+// The full picture: a Layer 3 packet (addressed by IP) encapsulated inside a
+// Layer 2 frame (addressed by MAC), including encapsulation/decapsulation.
+
+function buildBasicL3Transfer(srcId: string, dstId: string): Scenario {
   const src = getDevice(srcId)
   const dst = getDevice(dstId)
   const srcNic = primaryNic(srcId)
@@ -132,3 +222,13 @@ export function buildL2Scenario(srcId: string, dstId: string): Scenario {
 
   return { srcId, dstId, steps }
 }
+
+export const basicL3Transfer: ScenarioDefinition = {
+  id: 'basic-l3-transfer',
+  name: 'Basic L3 transfer',
+  showLayer3: true,
+  build: buildBasicL3Transfer,
+}
+
+/** All registered scenarios, in the order they should appear in a picker. */
+export const scenarios: ScenarioDefinition[] = [basicL2Transfer, basicL3Transfer]
