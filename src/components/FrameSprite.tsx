@@ -20,8 +20,10 @@ interface FrameSpriteProps {
  * The single animated box: a yellow Layer 2 frame, always addressed by MAC.
  * When `showLayer3` is true, it wraps a green Layer 3 packet (addressed by
  * IP); wrapping/unwrapping is revealed via CSS so encapsulation and
- * decapsulation read as one shell opening and closing. When false, the frame
- * carries a plain "Payload" placeholder instead — no IP involved.
+ * decapsulation read as one shell opening and closing. When false, or during
+ * an ARP request/reply (phase 'arp' — ARP never carries an L3 packet, even
+ * in scenarios where IP addresses are otherwise shown), the frame carries a
+ * plain payload placeholder instead.
  */
 export function FrameSprite({
   sprite,
@@ -48,8 +50,16 @@ export function FrameSprite({
   const left = `${(pos.x / STAGE_WIDTH) * 100}%`
   const top = `${(pos.y / STAGE_HEIGHT) * 100}%`
 
-  const framed = sprite?.phase === 'frame'
+  const framed = sprite?.phase === 'frame' || sprite?.phase === 'arp'
   const decap = sprite?.phase === 'decap'
+
+  // ARP steps address the box themselves (request/reply travel in opposite
+  // directions), overriding the Lesson-level from/to computed once for the
+  // scenario's overall src→dst.
+  const displayFromMac = sprite?.fromMac ?? fromMac
+  const displayToMac = sprite?.toMac ?? toMac
+  const boxTag = sprite?.boxTag ?? 'L2 FRAME'
+  const payloadText = sprite?.payloadText ?? 'Payload'
 
   const classes = [
     'frame-sprite',
@@ -75,16 +85,16 @@ export function FrameSprite({
       {/* Yellow Layer 2 frame — the outer shell. */}
       <div className="l2-frame">
         <div className="box-header">
-          <span className="box-tag">L2 FRAME</span>
+          <span className="box-tag">{boxTag}</span>
           <span className="addr">
-            FROM <b>{fromMac}</b>
+            FROM <b>{displayFromMac}</b>
           </span>
           <span className="addr to-mac">
-            TO <b>{toMac}</b>
+            TO <b>{displayToMac}</b>
           </span>
         </div>
 
-        {showLayer3 ? (
+        {showLayer3 && !!sprite && sprite.phase !== 'arp' ? (
           // Green Layer 3 packet — the payload inside.
           <div className="l3-packet">
             <div className="box-header">
@@ -101,7 +111,7 @@ export function FrameSprite({
         ) : (
           // No packet at this point in the storyboard — just an opaque
           // payload, addressed only by the frame's MAC headers above.
-          <div className="frame-payload">Payload</div>
+          <div className="frame-payload">{payloadText}</div>
         )}
       </div>
     </div>

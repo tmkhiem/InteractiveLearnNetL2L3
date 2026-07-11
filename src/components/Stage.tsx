@@ -4,7 +4,9 @@ import {
   STAGE_WIDTH,
   topology,
 } from '../model/network'
-import type { SpriteState } from '../model/scenario'
+import type { ArpTableView, BroadcastStep, SpriteState } from '../model/scenario'
+import { ArpTable } from './ArpTable'
+import { BroadcastFrame } from './BroadcastFrame'
 import { DeviceCard } from './DeviceCard'
 import { FrameSprite } from './FrameSprite'
 
@@ -19,6 +21,10 @@ interface StageProps {
   /** Whether the active scenario surfaces IP addressing at all. */
   showLayer3: boolean
   frameLabels: { fromMac: string; toMac: string; fromIp: string; toIp: string }
+  /** ARP table to show for the current step, or null to hide it. */
+  arpTable: ArpTableView | null
+  /** Broadcast fan-out to show for the current step, or null to hide it. */
+  broadcast: BroadcastStep | null
   /** Fade the whole topology in on mount. */
   revealed: boolean
 }
@@ -32,6 +38,8 @@ export function Stage({
   sliding,
   showLayer3,
   frameLabels,
+  arpTable,
+  broadcast,
   revealed,
 }: StageProps) {
   const router = getDevice('r1')
@@ -123,6 +131,23 @@ export function Stage({
         showLayer3={showLayer3}
         {...frameLabels}
       />
+
+      {broadcast?.clones.map((clone) => (
+        <BroadcastFrame
+          key={clone.at}
+          originId={broadcast.originId}
+          atId={clone.at}
+          fromMac={broadcast.fromMac}
+          toMac={broadcast.toMac}
+          boxTag={broadcast.boxTag}
+          payloadText={broadcast.payloadText}
+          travelMs={travelMs}
+          dropped={clone.dropped}
+          matched={clone.matched}
+        />
+      ))}
+
+      <ArpTable view={arpTable} />
     </div>
   )
 }

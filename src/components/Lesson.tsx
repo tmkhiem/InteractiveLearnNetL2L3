@@ -63,6 +63,8 @@ export function Lesson({
           sliding={currentStep?.kind === 'travel'}
           showLayer3={scenarioDef.showLayer3}
           frameLabels={frameLabels}
+          arpTable={currentStep?.arpTable ?? null}
+          broadcast={currentStep?.broadcast ?? null}
           revealed={revealed}
         />
       </main>

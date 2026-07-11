@@ -379,6 +379,137 @@
   text-align: center;
 }
 
+/* =================================================== Broadcast frame ==== */
+
+/* One cloned copy of a broadcast frame — several render together to fan a
+   single frame out to many devices at once (see FrameSprite for the
+   singleton case). Styled like a plain L2 frame carrying a payload. */
+.broadcast-frame {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition:
+    left var(--travel-ms, 600ms) cubic-bezier(0.45, 0, 0.55, 1),
+    top var(--travel-ms, 600ms) cubic-bezier(0.45, 0, 0.55, 1),
+    opacity 0.5s ease,
+    filter 0.5s ease,
+    transform 0.5s ease,
+    background 0.5s ease,
+    border-color 0.5s ease,
+    box-shadow 0.5s ease;
+  z-index: 5;
+  pointer-events: none;
+  width: max-content;
+  border-radius: 12px;
+  border: 2px solid var(--frame-yellow-border);
+  background: var(--frame-yellow);
+  padding: 10px 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.broadcast-frame .box-header {
+  color: var(--frame-yellow-ink);
+  margin-bottom: 8px;
+}
+.broadcast-frame .box-tag {
+  background: var(--frame-yellow-border);
+  color: #fff;
+}
+.broadcast-frame .frame-payload {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--frame-yellow-ink);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed var(--frame-yellow-border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+/* Non-matching clone: gray out, drop down, and fade away — visualizes a
+   device discarding a broadcast frame that isn't addressed to it. */
+.broadcast-frame.is-dropped {
+  filter: grayscale(1);
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(24px);
+  border-color: var(--border-strong);
+  background: var(--panel);
+  box-shadow: none;
+}
+.broadcast-frame.is-dropped .box-header,
+.broadcast-frame.is-dropped .box-tag {
+  color: var(--ink-faint);
+  background: var(--border-strong);
+}
+
+/* Matching clone: call out that this is the device the request is for. */
+.broadcast-frame.is-matched {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-soft);
+}
+
+/* ======================================================== ARP table ==== */
+
+.arp-table {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  z-index: 6;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+  min-width: 150px;
+  transition:
+    left 0.5s ease,
+    top 0.5s ease;
+}
+.arp-table-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+.arp-table-empty {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.arp-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+.arp-table th {
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  padding: 0 10px 3px 0;
+}
+.arp-table td {
+  padding: 2px 10px 2px 0;
+  white-space: nowrap;
+}
+.arp-table td.ip {
+  color: var(--packet-green-ink);
+  font-weight: 700;
+}
+.arp-table td.mac {
+  color: var(--frame-yellow-ink);
+  font-weight: 700;
+}
+.arp-table tr.is-new td {
+  background: var(--frame-yellow);
+  border-radius: 4px;
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
 @keyframes pulse {
   0%,
   100% {
