@@ -1,0 +1,49 @@
+:root {
+  /* Theme */
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --ink: #1c2333;
+  --ink-soft: #5b6478;
+  --ink-faint: #9aa3b5;
+  --border: #dfe3ec;
+  --border-strong: #c3cad9;
+  --accent: #2f6df6;
+  --accent-soft: rgba(47, 109, 246, 0.12);
+
+  /* The two teaching colors */
+  --frame-yellow: #fdf3c4;
+  --frame-yellow-border: #e0ac2b;
+  --frame-yellow-ink: #7a5a05;
+  --packet-green: #d6f3df;
+  --packet-green-border: #34a866;
+  --packet-green-ink: #14653a;
+
+  --lan: rgba(47, 109, 246, 0.05);
+  --lan-border: rgba(47, 109, 246, 0.25);
+
+  --mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  color-scheme: light;
+  font-family: var(--sans);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+}
+
+button {
+  font-family: inherit;
+}

@@ -1,0 +1,517 @@
+/* ============================================================= Layout ==== */
+
+.app {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.app-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.app-header p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+  max-width: 70ch;
+}
+
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85em;
+  border: 1px solid transparent;
+}
+.chip-frame {
+  background: var(--frame-yellow);
+  border-color: var(--frame-yellow-border);
+  color: var(--frame-yellow-ink);
+}
+.chip-packet {
+  background: var(--packet-green);
+  border-color: var(--packet-green-border);
+  color: var(--packet-green-ink);
+}
+
+/* ============================================================== Stage ==== */
+
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 600;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.stage.is-revealed {
+  opacity: 1;
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lan-region {
+  fill: var(--lan);
+  stroke: var(--lan-border);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 6;
+}
+
+.link {
+  stroke: var(--border-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.link-external {
+  stroke: var(--border);
+  stroke-dasharray: 4 7;
+  opacity: 0.7;
+}
+
+.lan-tag {
+  position: absolute;
+  left: 6%;
+  top: 15%;
+  transform: translateY(-140%);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  opacity: 0.75;
+}
+
+.cloud {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  border: 1px dashed var(--border-strong);
+  background: var(--bg);
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+/* ======================================================== Device card ==== */
+
+.device-card {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.device-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 2px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.device-icon {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.device-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.device-sub {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+
+.device-addrs {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+.device-addrs div {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  align-items: baseline;
+}
+.device-addrs dt {
+  color: var(--ink-faint);
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+.device-addrs dd {
+  margin: 0;
+}
+.device-addrs .mac {
+  color: var(--frame-yellow-ink);
+  font-weight: 700;
+}
+.device-addrs .ip {
+  color: var(--packet-green-ink);
+  font-weight: 700;
+}
+
+/* Router card is wider so its two NICs sit side by side: eth0 (LAN) on the
+   left, eth1 (WAN) on the right — matching their physical direction (switch
+   to the left, Internet to the right). */
+.device-card.kind-router {
+  width: 190px;
+}
+.router-nics {
+  flex-direction: row;
+  gap: 6px;
+}
+.router-nics div {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.router-nics .nic-wan {
+  opacity: 0.45;
+}
+
+/* Selection + active highlighting */
+.device-card.role-src .device-badge {
+  border-color: var(--frame-yellow-border);
+  box-shadow: 0 0 0 4px rgba(224, 172, 43, 0.18);
+}
+.device-card.role-dst .device-badge {
+  border-color: var(--packet-green-border);
+  box-shadow: 0 0 0 4px rgba(52, 168, 102, 0.18);
+}
+.device-card.is-active .device-badge {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-soft);
+  transform: scale(1.08);
+}
+
+/* ======================================================= Frame sprite ==== */
+
+.frame-sprite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  /* Position snaps instantly by default (create/encap/inspect/decap/deliver
+     steps stay put or only restyle in place); only .is-sliding animates the
+     left/top move, for genuine 'travel' steps between devices. */
+  transition: opacity 0.35s ease;
+  z-index: 5;
+  pointer-events: none;
+  width: max-content;
+}
+.frame-sprite.is-sliding {
+  transition:
+    left var(--travel-ms, 600ms) cubic-bezier(0.45, 0, 0.55, 1),
+    top var(--travel-ms, 600ms) cubic-bezier(0.45, 0, 0.55, 1),
+    opacity 0.35s ease;
+}
+.frame-sprite.is-hidden {
+  opacity: 0;
+}
+.frame-sprite.is-visible {
+  opacity: 1;
+}
+
+/* Yellow Layer 2 frame — the outer shell that wraps/unwraps. */
+.l2-frame {
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: transparent;
+  padding: 0;
+  transition:
+    background 0.5s ease,
+    border-color 0.5s ease,
+    padding 0.5s ease,
+    box-shadow 0.5s ease;
+}
+.frame-sprite.is-framed .l2-frame,
+.frame-sprite.is-decap .l2-frame {
+  background: var(--frame-yellow);
+  border-color: var(--frame-yellow-border);
+  padding: 10px 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.frame-sprite.is-decap .l2-frame {
+  border-style: dashed;
+  opacity: 0.55;
+  transform: translateY(-6px);
+}
+
+/* Box headers (shared by frame + packet). */
+.box-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.box-tag {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.l2-frame > .box-header {
+  color: var(--frame-yellow-ink);
+  margin-bottom: 8px;
+  max-height: 20px;
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    max-height 0.45s ease,
+    opacity 0.45s ease,
+    margin 0.45s ease;
+}
+/* In packet-only phase the L2 header collapses away. */
+.frame-sprite:not(.is-framed):not(.is-decap) .l2-frame > .box-header {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+.l2-frame > .box-header .box-tag {
+  background: var(--frame-yellow-border);
+  color: #fff;
+}
+.box-header .addr b {
+  font-weight: 700;
+}
+
+/* Highlight the destination MAC at the switch. */
+.to-mac {
+  border-radius: 4px;
+  padding: 0 3px;
+  transition: background 0.3s ease;
+}
+.frame-sprite.highlight-to .to-mac {
+  background: var(--frame-yellow-border);
+  color: #fff;
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
+/* Green Layer 3 packet — always present. */
+.l3-packet {
+  border-radius: 9px;
+  border: 2px solid var(--packet-green-border);
+  background: var(--packet-green);
+  padding: 8px 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+.l3-packet > .box-header {
+  color: var(--packet-green-ink);
+  margin-bottom: 6px;
+}
+.l3-packet .box-tag {
+  background: var(--packet-green-border);
+  color: #fff;
+}
+.packet-payload {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--packet-green-ink);
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 5px;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 172, 43, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(224, 172, 43, 0);
+  }
+}
+
+/* ========================================================== Narration ==== */
+
+.narration {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px 18px;
+  min-height: 92px;
+}
+.narration.is-realization {
+  border-left-color: var(--frame-yellow-border);
+  background: linear-gradient(0deg, var(--frame-yellow) 0%, var(--panel) 120%);
+}
+.narration-meta {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 4px;
+}
+.narration.is-realization .narration-meta {
+  color: var(--frame-yellow-ink);
+}
+.narration-main {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.narration-detail {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.narration-idle {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* =========================================================== Controls ==== */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+.picker-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.picker select {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.picker-arrow {
+  padding-bottom: 8px;
+  color: var(--ink-faint);
+  font-size: 1.1rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+.button-group button {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.button-group button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.button-group button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.button-group button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.speed-group {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.speed-group button {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-left: 1px solid var(--border);
+}
+.speed-group button:first-child {
+  border-left: none;
+}
+.speed-group button.is-selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .app-header h1 {
+    font-size: 1.2rem;
+  }
+  .speed-group {
+    margin-left: 0;
+  }
+}
