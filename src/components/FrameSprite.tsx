@@ -106,7 +106,7 @@ export function FrameSprite({
                 TO <b>{toIp}</b>
               </span>
             </div>
-            <div className="packet-payload">App data</div>
+            <div className="packet-payload">{payloadText}</div>
           </div>
         ) : (
           // No packet at this point in the storyboard — just an opaque

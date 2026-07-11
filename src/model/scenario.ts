@@ -286,6 +286,164 @@ export const basicL3Transfer: ScenarioDefinition = {
   build: buildBasicL3Transfer,
 }
 
+// --- Local ping exchange ------------------------------------------------------
+// A full round trip built on top of "Basic L3 transfer": an ICMP Echo Request
+// travels src → dst exactly as before, then dst builds and sends back an
+// ICMP Echo Reply — a fresh Layer 3 packet in a fresh Layer 2 frame,
+// addressed in the opposite direction. Both legs stay inside the local
+// network and are forwarded by the switch on MAC alone.
+
+function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
+  const src = getDevice(srcId)
+  const dst = getDevice(dstId)
+  const srcNic = primaryNic(srcId)
+  const dstNic = primaryNic(dstId)
+
+  const steps: Step[] = [
+    // --- Leg 1: ICMP Echo Request, src → dst ---------------------------------
+    {
+      kind: 'create',
+      narration: `${src.name} pings ${dst.name}.`,
+      detail: `It builds a Layer 3 packet carrying an ICMP Echo Request: FROM ${srcNic.ip} → TO ${dstNic.ip}.`,
+      sprite: { at: srcId, phase: 'packet', payloadText: 'ICMP Request' },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: 'Encapsulation: the ICMP Echo Request is wrapped in a Layer 2 frame.',
+      detail: `The frame is addressed FROM ${srcNic.mac} → TO ${dstNic.mac}.`,
+      sprite: { at: srcId, phase: 'frame', payloadText: 'ICMP Request' },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves ${src.name} and travels to the switch SW1.`,
+      detail: 'It rides the cable as a single unit — frame on the outside, ICMP request sealed inside.',
+      sprite: { at: 'sw1', phase: 'frame', payloadText: 'ICMP Request' },
+      activeDevice: 'sw1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: 'SW1 reads only the destination MAC address.',
+      detail: `It sees TO ${dstNic.mac} and forwards toward ${dst.name}.`,
+      sprite: {
+        at: 'sw1',
+        phase: 'frame',
+        highlightTo: true,
+        payloadText: 'ICMP Request',
+      },
+      activeDevice: 'sw1',
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `SW1 forwards the frame to ${dst.name}.`,
+      detail: 'Same frame, same request — still travelling as one unit.',
+      sprite: { at: dstId, phase: 'frame', payloadText: 'ICMP Request' },
+      activeDevice: dstId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `Decapsulation: ${dst.name} peels off the Layer 2 frame.`,
+      detail: `The destination MAC matched (${dstNic.mac}), so the frame is opened and the ICMP Echo Request is revealed.`,
+      sprite: { at: dstId, phase: 'decap', payloadText: 'ICMP Request' },
+      activeDevice: dstId,
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${dst.name} receives the ICMP Echo Request.`,
+      detail: `It reads the request (FROM ${srcNic.ip} → TO ${dstNic.ip}) and prepares an ICMP Echo Reply.`,
+      sprite: { at: dstId, phase: 'packet', payloadText: 'ICMP Request' },
+      activeDevice: dstId,
+      duration: HOLD_MS,
+    },
+    // --- Leg 2: ICMP Echo Reply, dst → src (the response) --------------------
+    {
+      kind: 'create',
+      narration: `${dst.name} builds an ICMP Echo Reply.`,
+      detail: `A new Layer 3 packet: FROM ${dstNic.ip} → TO ${srcNic.ip}.`,
+      sprite: { at: dstId, phase: 'packet', payloadText: 'ICMP Reply' },
+      activeDevice: dstId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: 'Encapsulation: the reply is wrapped in a new Layer 2 frame.',
+      detail: `Addressed FROM ${dstNic.mac} → TO ${srcNic.mac} — a fresh frame for the return trip.`,
+      sprite: { at: dstId, phase: 'frame', payloadText: 'ICMP Reply' },
+      activeDevice: dstId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The reply leaves ${dst.name} and travels to the switch SW1.`,
+      detail: 'Same round trip, opposite direction.',
+      sprite: { at: 'sw1', phase: 'frame', payloadText: 'ICMP Reply' },
+      activeDevice: 'sw1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: 'SW1 again reads only the destination MAC address.',
+      detail: `It sees TO ${srcNic.mac} and forwards toward ${src.name}.`,
+      sprite: {
+        at: 'sw1',
+        phase: 'frame',
+        highlightTo: true,
+        payloadText: 'ICMP Reply',
+      },
+      activeDevice: 'sw1',
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `SW1 forwards the reply to ${src.name}.`,
+      detail: 'The reply completes the round trip.',
+      sprite: { at: srcId, phase: 'frame', payloadText: 'ICMP Reply' },
+      activeDevice: srcId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `Decapsulation: ${src.name} peels off the Layer 2 frame.`,
+      detail: `The destination MAC matched (${srcNic.mac}), so the frame is opened and the ICMP Echo Reply is revealed.`,
+      sprite: { at: srcId, phase: 'decap', payloadText: 'ICMP Reply' },
+      activeDevice: srcId,
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${src.name} receives the ICMP Echo Reply. Ping complete.`,
+      detail: `The reply (FROM ${dstNic.ip} → TO ${srcNic.ip}) confirms ${dst.name} is reachable.`,
+      sprite: { at: srcId, phase: 'packet', payloadText: 'ICMP Reply' },
+      activeDevice: srcId,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'callout',
+      narration: 'A ping is a full round trip.',
+      detail: `Every frame stayed inside ${topology.localNetwork} — an ICMP Echo Request out, an ICMP Echo Reply back, and the switch forwarded both using MAC addresses alone.`,
+      realization: true,
+      sprite: null,
+      duration: HOLD_MS,
+    },
+  ]
+
+  return { srcId, dstId, steps }
+}
+
+export const localPingExchange: ScenarioDefinition = {
+  id: 'local-ping-exchange',
+  name: 'Local ping exchange',
+  showLayer3: true,
+  build: buildLocalPingExchange,
+}
+
 // --- ARP learning ------------------------------------------------------------
 // How a PC discovers a neighbor's MAC address before it can address a frame
 // to it: broadcast an ARP request, get a unicast ARP reply, and cache the
@@ -481,5 +639,6 @@ export const arpLearning: ScenarioDefinition = {
 export const scenarios: ScenarioDefinition[] = [
   basicL2Transfer,
   basicL3Transfer,
+  localPingExchange,
   arpLearning,
 ]
