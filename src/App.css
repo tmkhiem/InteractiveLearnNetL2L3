@@ -1,12 +1,32 @@
 /* ============================================================= Layout ==== */
 
 .app {
-  max-width: 1120px;
+  height: 100vh;
+  max-width: 1420px;
   margin: 0 auto;
   padding: 24px 20px 40px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'narration controls'
+    'header controls'
+    'main controls';
+  column-gap: 16px;
+  row-gap: 8px;
+  align-items: start;
+}
+
+.app-header {
+  grid-area: header;
+}
+
+.app-main {
+  grid-area: main;
+  align-self: stretch;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .app-header p.scenario-label {
@@ -56,16 +76,35 @@
 .stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 1000 / 600;
+  flex: 1;
+  min-height: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
   opacity: 0;
   transition: opacity 0.9s ease;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 .stage.is-revealed {
   opacity: 1;
+}
+.stage.is-dragging {
+  cursor: grabbing;
+}
+
+/* The pannable layer: sized to exactly fill the viewport above, but left at
+   `overflow: visible` so content anchored outside its own box (e.g. an ARP
+   table above a top-row PC) isn't clipped by ITS bounds — only by the fixed
+   .stage viewport, which is what dragging reveals. */
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+}
+.stage-canvas.is-animated {
+  transition: transform 0.45s ease;
 }
 
 .links {
@@ -87,17 +126,10 @@
   stroke-width: 3;
   stroke-linecap: round;
 }
-.link-external {
-  stroke: var(--border);
-  stroke-dasharray: 4 7;
-  opacity: 0.7;
-}
 
 .lan-tag {
   position: absolute;
-  left: 6%;
-  top: 15%;
-  transform: translateY(-140%);
+  transform: translate(8px, -130%);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -105,16 +137,29 @@
   opacity: 0.75;
 }
 
-.cloud {
+.nic-link-label {
   position: absolute;
   transform: translate(-50%, -50%);
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--ink-faint);
-  border: 1px dashed var(--border-strong);
-  background: var(--bg);
-  padding: 8px 12px;
-  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.nic-link-label-line:first-child {
+  color: var(--frame-yellow-ink);
+}
+.nic-link-label-line + .nic-link-label-line {
+  color: var(--packet-green-ink);
 }
 
 /* ======================================================== Device card ==== */
@@ -196,29 +241,6 @@
 .device-addrs .ip {
   color: var(--packet-green-ink);
   font-weight: 700;
-}
-
-/* Router card is wider so its two NICs sit side by side: eth0 (LAN) on the
-   left, eth1 (WAN) on the right — matching their physical direction (switch
-   to the left, Internet to the right). */
-.device-card.kind-router {
-  width: 190px;
-}
-.router-nics {
-  flex-direction: row;
-  gap: 6px;
-}
-.router-nics div {
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.router-nics .nic-wan {
-  opacity: 0.45;
 }
 
 /* Selection + active highlighting */
@@ -520,9 +542,73 @@
   }
 }
 
+/* =================================================== Routing table ==== */
+
+.routing-table {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  z-index: 6;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+  min-width: 150px;
+  transition:
+    left 0.5s ease,
+    top 0.5s ease;
+}
+.routing-table-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+.routing-table-empty {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.routing-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+.routing-table th {
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  padding: 0 10px 3px 0;
+}
+.routing-table td {
+  padding: 2px 10px 2px 0;
+  white-space: nowrap;
+}
+.routing-table td.network {
+  color: var(--packet-green-ink);
+  font-weight: 700;
+}
+.routing-table td.gateway {
+  color: var(--frame-yellow-ink);
+  font-weight: 700;
+}
+.routing-table tr.is-match td {
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
+
 /* ========================================================== Narration ==== */
 
 .narration {
+  grid-area: narration;
   background: var(--panel);
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
@@ -564,20 +650,24 @@
 /* =========================================================== Controls ==== */
 
 .controls {
+  grid-area: controls;
+  position: sticky;
+  top: 24px;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 22px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 16px;
 }
 
 .picker-group {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
 }
 .picker {
   display: flex;
@@ -597,11 +687,28 @@
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--panel);
+  width: 100%;
 }
 .picker-arrow {
-  padding-bottom: 8px;
+  align-self: center;
   color: var(--ink-faint);
   font-size: 1.1rem;
+  transform: rotate(90deg);
+}
+
+.picker.toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.picker.toggle input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.picker.toggle input:disabled {
+  cursor: not-allowed;
 }
 
 .button-group {
@@ -609,7 +716,8 @@
   gap: 8px;
 }
 .button-group button {
-  padding: 8px 16px;
+  flex: 1;
+  padding: 8px 10px;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 8px;
@@ -639,9 +747,9 @@
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   overflow: hidden;
-  margin-left: auto;
 }
 .speed-group button {
+  flex: 1;
   padding: 8px 14px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -657,13 +765,4 @@
 .speed-group button.is-selected {
   background: var(--accent);
   color: #fff;
-}
-
-@media (max-width: 720px) {
-  .app-header h1 {
-    font-size: 1.2rem;
-  }
-  .speed-group {
-    margin-left: 0;
-  }
 }

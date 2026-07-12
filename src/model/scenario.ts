@@ -2,7 +2,15 @@
 // animated steps. The player (usePlayer) walks this list; Stage renders
 // whatever `sprite` state the current step declares.
 
-import { endpoints, getDevice, primaryNic, topology } from './network'
+import {
+  gatewayNic,
+  getDevice,
+  primaryNic,
+  subnet1Endpoints,
+  subnetOf,
+  switchFor,
+  topology,
+} from './network'
 
 /** What the traveling box looks like right now. */
 export type SpritePhase =
@@ -42,6 +50,22 @@ export interface ArpEntry {
 export interface ArpTableView {
   deviceId: string
   entries: ArpEntry[]
+}
+
+/** One row of a device's routing table. */
+export interface RoutingEntry {
+  /** Destination network, e.g. "172.16.61.0/24". */
+  network: string
+  /** Next-hop IP for that network (the gateway). */
+  gateway: string
+  /** True to highlight this as the entry a lookup matched. */
+  isMatch?: boolean
+}
+
+/** The routing table to display (if any) during a step. */
+export interface RoutingTableView {
+  deviceId: string
+  entries: RoutingEntry[]
 }
 
 /** One cloned copy of a broadcast frame, sitting at a single device. */
@@ -94,6 +118,8 @@ export interface Step {
   activeDevice?: string
   /** ARP table to display during this step, or null/omitted to hide it. */
   arpTable?: ArpTableView | null
+  /** Routing table to display during this step, or null/omitted to hide it. */
+  routingTable?: RoutingTableView | null
   /** Broadcast fan-out to display during this step, in place of `sprite`. */
   broadcast?: BroadcastStep | null
   /** Base duration in ms (scaled by playback speed). */
@@ -116,6 +142,11 @@ export interface ScenarioDefinition {
   name: string
   /** Whether this scenario surfaces IP addressing (Layer 3) at all. */
   showLayer3: boolean
+  /**
+   * True if src/dst are expected to be on different subnets (routed by r1)
+   * rather than sharing one switch. Drives the sender/receiver picker pool.
+   */
+  crossSubnet?: boolean
   build: (srcId: string, dstId: string) => Scenario
 }
 
@@ -460,8 +491,9 @@ function buildArpLearning(srcId: string, dstId: string): Scenario {
   const requestText = `Who has ${dstNic.ip}? Tell ${srcNic.ip}.`
   const replyText = `${dstNic.ip} is at ${dstNic.mac}.`
   // Everyone else on the local network: this is who the broadcast fans out
-  // to, and everyone but dst discards it.
-  const broadcastTargets = endpoints.filter((d) => d.id !== srcId)
+  // to, and everyone but dst discards it. Scoped to sw1's own broadcast
+  // domain — a broadcast never crosses the router onto another subnet.
+  const broadcastTargets = subnet1Endpoints.filter((d) => d.id !== srcId)
   const nonMatching = broadcastTargets.filter((d) => d.id !== dstId)
 
   const emptyTable: ArpTableView = { deviceId: srcId, entries: [] }
@@ -635,10 +667,261 @@ export const arpLearning: ScenarioDefinition = {
   build: buildArpLearning,
 }
 
+// --- Routing between subnets --------------------------------------------------
+// src and dst live on different subnets, so the packet must be routed by r1.
+// The Layer 3 packet (src IP -> dst IP) never changes, but it's carried in
+// two different Layer 2 frames: one from src to r1, and a fresh one from r1
+// to dst. Before src can build that first frame, it has to work out who to
+// address it to: a routing-table lookup shows the destination isn't local
+// and must go via the gateway, then an (already-populated) ARP table supplies
+// the gateway's MAC. R1's own re-encapsulation still treats its side as
+// already known — this lesson's new ground is src's own lookup, not ARP
+// itself (that's the ARP-learning lesson).
+
+const UNKNOWN_MAC = '??:??:??'
+
+function buildRoutingExample(srcId: string, dstId: string): Scenario {
+  const src = getDevice(srcId)
+  const dst = getDevice(dstId)
+  const srcNic = primaryNic(srcId)
+  const dstNic = primaryNic(dstId)
+  const srcSwitch = switchFor(srcId)
+  const dstSwitch = switchFor(dstId)
+  const srcGateway = gatewayNic(srcId)
+  const dstGateway = gatewayNic(dstId)
+  const srcSubnet = subnetOf(srcId)
+  const dstSubnet = subnetOf(dstId)
+
+  const routingEntries = topology.subnets
+    .filter((s) => s.cidr !== srcSubnet.cidr)
+    .map((s) => ({
+      network: s.cidr,
+      gateway: srcGateway.ip ?? '',
+      isMatch: s.cidr === dstSubnet.cidr,
+    }))
+  const srcRoutingTable: RoutingTableView = { deviceId: srcId, entries: routingEntries }
+  const srcArpTable: ArpTableView = {
+    deviceId: srcId,
+    entries: [{ ip: srcGateway.ip ?? '', mac: srcGateway.mac }],
+  }
+
+  const steps: Step[] = [
+    {
+      kind: 'create',
+      narration: `${src.name} wants to send data to ${dst.name}.`,
+      detail: `It builds a Layer 3 packet: FROM ${srcNic.ip} → TO ${dstNic.ip}.`,
+      sprite: { at: srcId, phase: 'packet' },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `${src.name} starts building a Layer 2 frame, but doesn't know the destination MAC yet.`,
+      detail: `${dstNic.ip} isn't a MAC address — before ${src.name} can address a frame, it has to work out where to actually send it.`,
+      sprite: {
+        at: srcId,
+        phase: 'frame',
+        fromMac: srcNic.mac,
+        toMac: UNKNOWN_MAC,
+      },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'callout',
+      narration: `${dstNic.ip} isn't in ${src.name}'s own subnet (${srcSubnet.cidr}).`,
+      detail: `Because this IP is not in the subnet, ${src.name} should contact the router responsible for this subnet. Its routing table shows ${dstSubnet.cidr} is reachable via ${srcGateway.ip}.`,
+      realization: true,
+      sprite: null,
+      activeDevice: srcId,
+      routingTable: srcRoutingTable,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'callout',
+      narration: `${src.name} looks up ${srcGateway.ip} in its ARP table.`,
+      detail: `Already cached: ${srcGateway.ip} is at ${srcGateway.mac} (R1's ${srcGateway.ifname}). No ARP request needed this time.`,
+      sprite: null,
+      activeDevice: srcId,
+      arpTable: srcArpTable,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `Encapsulation: the packet is wrapped in a Layer 2 frame addressed to the gateway.`,
+      detail: `The frame is addressed FROM ${srcNic.mac} → TO ${srcGateway.mac} (R1's ${srcGateway.ifname}) — the Layer 2 destination is the router, but the Layer 3 destination is still ${dst.name}.`,
+      sprite: {
+        at: srcId,
+        phase: 'frame',
+        fromMac: srcNic.mac,
+        toMac: srcGateway.mac,
+      },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves ${src.name} and travels to ${srcSwitch.name}.`,
+      detail: 'Same as any other frame so far — the switch only sees a MAC destination.',
+      sprite: {
+        at: srcSwitch.id,
+        phase: 'frame',
+        fromMac: srcNic.mac,
+        toMac: srcGateway.mac,
+      },
+      activeDevice: srcSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: `${srcSwitch.name} reads the destination MAC and forwards to R1.`,
+      detail: `It sees TO ${srcGateway.mac} and forwards toward R1 — R1's ${srcGateway.ifname} is just another device on this subnet as far as the switch is concerned.`,
+      sprite: {
+        at: srcSwitch.id,
+        phase: 'frame',
+        fromMac: srcNic.mac,
+        toMac: srcGateway.mac,
+        highlightTo: true,
+      },
+      activeDevice: srcSwitch.id,
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${srcSwitch.name} forwards the frame to R1.`,
+      detail: `R1 receives it on ${srcGateway.ifname}, because the destination MAC matches that NIC.`,
+      sprite: {
+        at: 'r1',
+        phase: 'frame',
+        fromMac: srcNic.mac,
+        toMac: srcGateway.mac,
+      },
+      activeDevice: 'r1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `Decapsulation: R1 peels off the Layer 2 frame.`,
+      detail: `R1 opens the frame to inspect the Layer 3 packet — it needs the destination IP to decide where to send it next.`,
+      sprite: {
+        at: 'r1',
+        phase: 'decap',
+        fromMac: srcNic.mac,
+        toMac: srcGateway.mac,
+      },
+      activeDevice: 'r1',
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'callout',
+      narration: `R1 looks up ${dstNic.ip} in its routing table.`,
+      detail: `${dstSubnet.cidr} is directly connected out ${dstGateway.ifname}. The Layer 3 packet (FROM ${srcNic.ip} → TO ${dstNic.ip}) is unchanged — only the Layer 2 framing will be rebuilt for the next link.`,
+      realization: true,
+      sprite: { at: 'r1', phase: 'packet' },
+      activeDevice: 'r1',
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `R1 re-encapsulates the packet in a new Layer 2 frame.`,
+      detail: `The new frame is addressed FROM ${dstGateway.mac} (R1's ${dstGateway.ifname}) → TO ${dstNic.mac} — a completely new Layer 2 frame for the new link, still carrying the same Layer 3 packet.`,
+      sprite: {
+        at: 'r1',
+        phase: 'frame',
+        fromMac: dstGateway.mac,
+        toMac: dstNic.mac,
+      },
+      activeDevice: 'r1',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves R1 and travels to ${dstSwitch.name}.`,
+      detail: `Out ${dstGateway.ifname}, onto ${dst.name}'s subnet.`,
+      sprite: {
+        at: dstSwitch.id,
+        phase: 'frame',
+        fromMac: dstGateway.mac,
+        toMac: dstNic.mac,
+      },
+      activeDevice: dstSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: `${dstSwitch.name} reads the destination MAC and forwards to ${dst.name}.`,
+      detail: `It sees TO ${dstNic.mac} and forwards toward ${dst.name}.`,
+      sprite: {
+        at: dstSwitch.id,
+        phase: 'frame',
+        fromMac: dstGateway.mac,
+        toMac: dstNic.mac,
+        highlightTo: true,
+      },
+      activeDevice: dstSwitch.id,
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${dstSwitch.name} forwards the frame to ${dst.name}.`,
+      detail: 'The final hop of the journey.',
+      sprite: {
+        at: dstId,
+        phase: 'frame',
+        fromMac: dstGateway.mac,
+        toMac: dstNic.mac,
+      },
+      activeDevice: dstId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `Decapsulation: ${dst.name} peels off the Layer 2 frame.`,
+      detail: `The destination MAC matched (${dstNic.mac}), so the frame is opened and the packet is revealed.`,
+      sprite: {
+        at: dstId,
+        phase: 'decap',
+        fromMac: dstGateway.mac,
+        toMac: dstNic.mac,
+      },
+      activeDevice: dstId,
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${dst.name} receives the packet. Delivery complete.`,
+      detail: `The Layer 3 packet (FROM ${srcNic.ip} → TO ${dstNic.ip}) is handed up to be processed — unchanged since the moment ${src.name} created it.`,
+      sprite: { at: dstId, phase: 'packet' },
+      activeDevice: dstId,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'callout',
+      narration: 'One packet, two frames.',
+      detail:
+        'The Layer 3 packet never changed. But it travelled inside two completely different Layer 2 frames — one per link — because R1 rebuilds the framing at every hop while routing by IP, not by MAC.',
+      realization: true,
+      sprite: null,
+      duration: HOLD_MS,
+    },
+  ]
+
+  return { srcId, dstId, steps }
+}
+
+export const routingExample: ScenarioDefinition = {
+  id: 'routing-example',
+  name: 'Routing between subnets',
+  showLayer3: true,
+  crossSubnet: true,
+  build: buildRoutingExample,
+}
+
 /** All registered scenarios, in the order they should appear in a picker. */
 export const scenarios: ScenarioDefinition[] = [
   basicL2Transfer,
   basicL3Transfer,
   localPingExchange,
   arpLearning,
+  routingExample,
 ]

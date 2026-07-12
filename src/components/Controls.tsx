@@ -1,4 +1,4 @@
-import { endpoints } from '../model/network'
+import { routablePcs, subnet1Endpoints, subnetOf } from '../model/network'
 import { scenarios } from '../model/scenario'
 import type { Player, Speed } from '../hooks/usePlayer'
 
@@ -10,6 +10,10 @@ interface ControlsProps {
   onSrc: (id: string) => void
   onDst: (id: string) => void
   player: Player
+  showOtherSubnets: boolean
+  onToggleOtherSubnets: (value: boolean) => void
+  showHeader: boolean
+  onToggleHeader: (value: boolean) => void
 }
 
 const SPEEDS: Speed[] = ['slow', 'normal', 'fast']
@@ -22,7 +26,16 @@ export function Controls({
   onSrc,
   onDst,
   player,
+  showOtherSubnets,
+  onToggleOtherSubnets,
+  showHeader,
+  onToggleHeader,
 }: ControlsProps) {
+  const scenarioDef = scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
+  const pool = scenarioDef.crossSubnet ? routablePcs : subnet1Endpoints
+  const conflicts = (aId: string, bId: string) =>
+    scenarioDef.crossSubnet && subnetOf(aId).cidr === subnetOf(bId).cidr
+
   return (
     <div className="controls">
       <div className="picker-group">
@@ -43,8 +56,12 @@ export function Controls({
         <label className="picker">
           <span>Sender</span>
           <select value={srcId} onChange={(e) => onSrc(e.target.value)}>
-            {endpoints.map((d) => (
-              <option key={d.id} value={d.id} disabled={d.id === dstId}>
+            {pool.map((d) => (
+              <option
+                key={d.id}
+                value={d.id}
+                disabled={d.id === dstId || conflicts(d.id, dstId)}
+              >
                 {d.name}
               </option>
             ))}
@@ -58,12 +75,35 @@ export function Controls({
         <label className="picker">
           <span>Receiver</span>
           <select value={dstId} onChange={(e) => onDst(e.target.value)}>
-            {endpoints.map((d) => (
-              <option key={d.id} value={d.id} disabled={d.id === srcId}>
+            {pool.map((d) => (
+              <option
+                key={d.id}
+                value={d.id}
+                disabled={d.id === srcId || conflicts(d.id, srcId)}
+              >
                 {d.name}
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="picker toggle" title={scenarioDef.crossSubnet ? 'Always shown for this lesson' : undefined}>
+          <input
+            type="checkbox"
+            checked={!!scenarioDef.crossSubnet || showOtherSubnets}
+            disabled={!!scenarioDef.crossSubnet}
+            onChange={(e) => onToggleOtherSubnets(e.target.checked)}
+          />
+          <span>Show other subnets</span>
+        </label>
+
+        <label className="picker toggle">
+          <input
+            type="checkbox"
+            checked={showHeader}
+            onChange={(e) => onToggleHeader(e.target.checked)}
+          />
+          <span>Show app header</span>
         </label>
       </div>
 

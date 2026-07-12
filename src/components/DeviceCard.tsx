@@ -80,17 +80,7 @@ export function DeviceCard({
         <div className="device-sub">Layer 2 switch</div>
       )}
 
-      {device.kind === 'router' && (
-        <dl className="device-addrs router-nics">
-          {device.nics.map((nic) => (
-            <div key={nic.id} className={nic.external ? 'nic-wan' : ''}>
-              <dt>{nic.ifname}</dt>
-              <dd className="mac">{nic.mac}</dd>
-              {showLayer3 && <dd className="ip">{nic.ip}</dd>}
-            </div>
-          ))}
-        </dl>
-      )}
+      {device.kind === 'router' && <div className="device-sub">Router</div>}
     </div>
   )
 }

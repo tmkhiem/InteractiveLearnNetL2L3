@@ -15,6 +15,11 @@ interface LessonProps {
   onDst: (id: string) => void
   /** Whether the stage has faded in (owned by App so it happens once). */
   revealed: boolean
+  /** Raw toggle state — the routing lesson ignores this and always shows all subnets. */
+  showOtherSubnets: boolean
+  onToggleOtherSubnets: (value: boolean) => void
+  showHeader: boolean
+  onToggleHeader: (value: boolean) => void
 }
 
 /**
@@ -31,9 +36,14 @@ export function Lesson({
   onSrc,
   onDst,
   revealed,
+  showOtherSubnets,
+  onToggleOtherSubnets,
+  showHeader,
+  onToggleHeader,
 }: LessonProps) {
   const scenarioDef =
     scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
+  const otherSubnetsVisible = !!scenarioDef.crossSubnet || showOtherSubnets
   const scenario = useMemo(
     () => scenarioDef.build(srcId, dstId),
     [scenarioDef, srcId, dstId],
@@ -64,8 +74,10 @@ export function Lesson({
           showLayer3={scenarioDef.showLayer3}
           frameLabels={frameLabels}
           arpTable={currentStep?.arpTable ?? null}
+          routingTable={currentStep?.routingTable ?? null}
           broadcast={currentStep?.broadcast ?? null}
           revealed={revealed}
+          showOtherSubnets={otherSubnetsVisible}
         />
       </main>
 
@@ -83,6 +95,10 @@ export function Lesson({
         onSrc={onSrc}
         onDst={onDst}
         player={player}
+        showOtherSubnets={showOtherSubnets}
+        onToggleOtherSubnets={onToggleOtherSubnets}
+        showHeader={showHeader}
+        onToggleHeader={onToggleHeader}
       />
     </>
   )
