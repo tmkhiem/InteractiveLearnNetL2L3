@@ -58,6 +58,8 @@ export function FrameSprite({
   // scenario's overall src→dst.
   const displayFromMac = sprite?.fromMac ?? fromMac
   const displayToMac = sprite?.toMac ?? toMac
+  const displayFromIp = sprite?.fromIp ?? fromIp
+  const displayToIp = sprite?.toIp ?? toIp
   const boxTag = sprite?.boxTag ?? 'L2 FRAME'
   const payloadText = sprite?.payloadText ?? 'Payload'
 
@@ -100,10 +102,10 @@ export function FrameSprite({
             <div className="box-header">
               <span className="box-tag">L3 PACKET</span>
               <span className="addr">
-                FROM <b>{fromIp}</b>
+                FROM <b>{displayFromIp}</b>
               </span>
               <span className="addr">
-                TO <b>{toIp}</b>
+                TO <b>{displayToIp}</b>
               </span>
             </div>
             <div className="packet-payload">{payloadText}</div>

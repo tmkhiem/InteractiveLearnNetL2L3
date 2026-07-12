@@ -32,6 +32,13 @@ export interface SpriteState {
    */
   fromMac?: string
   toMac?: string
+  /**
+   * Per-step FROM/TO IP override, for the same reason as fromMac/toMac —
+   * a reply leg travels dst → src, opposite the scenario's overall
+   * src → dst, so the L3 packet's addressing can't reuse frameLabels either.
+   */
+  fromIp?: string
+  toIp?: string
   /** Box header tag override, e.g. "ARP REQUEST" / "ARP REPLY". */
   boxTag?: string
   /** Plain-payload text override (non-L3 scenarios only). */
@@ -398,7 +405,13 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'create',
       narration: `${dst.name} builds an ICMP Echo Reply.`,
       detail: `A new Layer 3 packet: FROM ${dstNic.ip} → TO ${srcNic.ip}.`,
-      sprite: { at: dstId, phase: 'packet', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: dstId,
+        phase: 'packet',
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: dstId,
       duration: CREATE_MS,
     },
@@ -406,7 +419,15 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'encap',
       narration: 'Encapsulation: the reply is wrapped in a new Layer 2 frame.',
       detail: `Addressed FROM ${dstNic.mac} → TO ${srcNic.mac} — a fresh frame for the return trip.`,
-      sprite: { at: dstId, phase: 'frame', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: dstId,
+        phase: 'frame',
+        fromMac: dstNic.mac,
+        toMac: srcNic.mac,
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: dstId,
       duration: ENCAP_MS,
     },
@@ -414,7 +435,15 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'travel',
       narration: `The reply leaves ${dst.name} and travels to the switch SW1.`,
       detail: 'Same round trip, opposite direction.',
-      sprite: { at: 'sw1', phase: 'frame', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: 'sw1',
+        phase: 'frame',
+        fromMac: dstNic.mac,
+        toMac: srcNic.mac,
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: 'sw1',
       duration: TRAVEL_MS,
     },
@@ -425,6 +454,10 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       sprite: {
         at: 'sw1',
         phase: 'frame',
+        fromMac: dstNic.mac,
+        toMac: srcNic.mac,
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
         highlightTo: true,
         payloadText: 'ICMP Reply',
       },
@@ -435,7 +468,15 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'travel',
       narration: `SW1 forwards the reply to ${src.name}.`,
       detail: 'The reply completes the round trip.',
-      sprite: { at: srcId, phase: 'frame', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: srcId,
+        phase: 'frame',
+        fromMac: dstNic.mac,
+        toMac: srcNic.mac,
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: srcId,
       duration: TRAVEL_MS,
     },
@@ -443,7 +484,15 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'decap',
       narration: `Decapsulation: ${src.name} peels off the Layer 2 frame.`,
       detail: `The destination MAC matched (${srcNic.mac}), so the frame is opened and the ICMP Echo Reply is revealed.`,
-      sprite: { at: srcId, phase: 'decap', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: srcId,
+        phase: 'decap',
+        fromMac: dstNic.mac,
+        toMac: srcNic.mac,
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: srcId,
       duration: DECAP_MS,
     },
@@ -451,7 +500,13 @@ function buildLocalPingExchange(srcId: string, dstId: string): Scenario {
       kind: 'deliver',
       narration: `${src.name} receives the ICMP Echo Reply. Ping complete.`,
       detail: `The reply (FROM ${dstNic.ip} → TO ${srcNic.ip}) confirms ${dst.name} is reachable.`,
-      sprite: { at: srcId, phase: 'packet', payloadText: 'ICMP Reply' },
+      sprite: {
+        at: srcId,
+        phase: 'packet',
+        fromIp: dstNic.ip,
+        toIp: srcNic.ip,
+        payloadText: 'ICMP Reply',
+      },
       activeDevice: srcId,
       duration: HOLD_MS,
     },

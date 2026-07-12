@@ -18,6 +18,11 @@
   --packet-green-border: #34a866;
   --packet-green-ink: #14653a;
 
+  /* Semi-transparent variants for the traveling message box, so it doesn't
+     fully hide a device's IP/MAC label when it sits on top of a card. */
+  --frame-yellow-translucent: rgba(253, 243, 196, 0.82);
+  --packet-green-translucent: rgba(214, 243, 223, 0.82);
+
   --lan: rgba(47, 109, 246, 0.05);
   --lan-border: rgba(47, 109, 246, 0.25);
 

@@ -298,7 +298,7 @@
 }
 .frame-sprite.is-framed .l2-frame,
 .frame-sprite.is-decap .l2-frame {
-  background: var(--frame-yellow);
+  background: var(--frame-yellow-translucent);
   border-color: var(--frame-yellow-border);
   padding: 10px 12px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
@@ -367,7 +367,7 @@
 .l3-packet {
   border-radius: 9px;
   border: 2px solid var(--packet-green-border);
-  background: var(--packet-green);
+  background: var(--packet-green-translucent);
   padding: 8px 10px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
@@ -423,7 +423,7 @@
   width: max-content;
   border-radius: 12px;
   border: 2px solid var(--frame-yellow-border);
-  background: var(--frame-yellow);
+  background: var(--frame-yellow-translucent);
   padding: 10px 12px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
 }
