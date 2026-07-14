@@ -1,4 +1,9 @@
-import { routablePcs, subnet1Endpoints, subnetOf } from '../model/network'
+import {
+  routablePcs,
+  subnet1Endpoints,
+  subnet1Pcs,
+  subnetOf,
+} from '../model/network'
 import { scenarios } from '../model/scenario'
 import type { Player, Speed } from '../hooks/usePlayer'
 
@@ -32,7 +37,11 @@ export function Controls({
   onToggleHeader,
 }: ControlsProps) {
   const scenarioDef = scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
-  const pool = scenarioDef.crossSubnet ? routablePcs : subnet1Endpoints
+  const defaultPool = scenarioDef.crossSubnet ? routablePcs : subnet1Endpoints
+  // DNS scenarios: sender is a local subnet-1 PC; receiver can be any PC
+  // (local or on another subnet).
+  const senderPool = scenarioDef.usesDns ? subnet1Pcs : defaultPool
+  const receiverPool = scenarioDef.usesDns ? routablePcs : defaultPool
   const conflicts = (aId: string, bId: string) =>
     scenarioDef.crossSubnet && subnetOf(aId).cidr === subnetOf(bId).cidr
 
@@ -56,7 +65,7 @@ export function Controls({
         <label className="picker">
           <span>Sender</span>
           <select value={srcId} onChange={(e) => onSrc(e.target.value)}>
-            {pool.map((d) => (
+            {senderPool.map((d) => (
               <option
                 key={d.id}
                 value={d.id}
@@ -75,7 +84,7 @@ export function Controls({
         <label className="picker">
           <span>Receiver</span>
           <select value={dstId} onChange={(e) => onDst(e.target.value)}>
-            {pool.map((d) => (
+            {receiverPool.map((d) => (
               <option
                 key={d.id}
                 value={d.id}
@@ -87,11 +96,11 @@ export function Controls({
           </select>
         </label>
 
-        <label className="picker toggle" title={scenarioDef.crossSubnet ? 'Always shown for this lesson' : undefined}>
+        <label className="picker toggle" title={scenarioDef.crossSubnet || scenarioDef.usesDns ? 'Always shown for this lesson' : undefined}>
           <input
             type="checkbox"
-            checked={!!scenarioDef.crossSubnet || showOtherSubnets}
-            disabled={!!scenarioDef.crossSubnet}
+            checked={!!scenarioDef.crossSubnet || !!scenarioDef.usesDns || showOtherSubnets}
+            disabled={!!scenarioDef.crossSubnet || !!scenarioDef.usesDns}
             onChange={(e) => onToggleOtherSubnets(e.target.checked)}
           />
           <span>Show other subnets</span>

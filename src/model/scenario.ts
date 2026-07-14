@@ -43,6 +43,36 @@ export interface SpriteState {
   boxTag?: string
   /** Plain-payload text override (non-L3 scenarios only). */
   payloadText?: string
+  /** When set, renders a third DNS payload layer inside the L3 packet. */
+  dnsPayload?: DnsPayload
+  /** UDP port shown in the L3 packet header, e.g. "53". */
+  udpPort?: string
+}
+
+/**
+ * The essence of a DNS query or response — kept deliberately simple (like the
+ * ARP request/reply box): a question, and, for a response, the answer. The
+ * presence of `answer` distinguishes a response from a query.
+ */
+export interface DnsPayload {
+  question: string
+  /** Present only in a DNS response. */
+  answer?: string
+}
+
+/** One row of a device's DNS cache. */
+export interface DnsCacheEntry {
+  hostname: string
+  ip: string
+  ttl: number
+  /** True to render this entry with a pulsing "just learned" highlight. */
+  isNew?: boolean
+}
+
+/** The DNS cache panel to display during a step. */
+export interface DnsCacheView {
+  deviceId: string
+  entries: DnsCacheEntry[]
 }
 
 /** One row of a device's ARP cache. */
@@ -127,6 +157,8 @@ export interface Step {
   arpTable?: ArpTableView | null
   /** Routing table to display during this step, or null/omitted to hide it. */
   routingTable?: RoutingTableView | null
+  /** DNS cache panel to display during this step, or null/omitted to hide it. */
+  dnsCache?: DnsCacheView | null
   /** Broadcast fan-out to display during this step, in place of `sprite`. */
   broadcast?: BroadcastStep | null
   /** Base duration in ms (scaled by playback speed). */
@@ -154,6 +186,11 @@ export interface ScenarioDefinition {
    * rather than sharing one switch. Drives the sender/receiver picker pool.
    */
   crossSubnet?: boolean
+  /**
+   * True if this scenario involves the DNS server. The DNS Server device is
+   * only drawn on the stage for these scenarios — it's clutter in the others.
+   */
+  usesDns?: boolean
   build: (srcId: string, dstId: string) => Scenario
 }
 
@@ -972,6 +1009,478 @@ export const routingExample: ScenarioDefinition = {
   build: buildRoutingExample,
 }
 
+// The DNS scenarios are longer and denser than the others (three nested layers,
+// a full routed round-trip), so each step is held on screen a bit longer to
+// give the learner time to read it. This factor only affects DNS steps.
+const DNS_DELAY_SCALE = 1.6
+function slowDown(steps: Step[]): Step[] {
+  return steps.map((s) => ({ ...s, duration: Math.round(s.duration * DNS_DELAY_SCALE) }))
+}
+
+// --- DNS resolution ----------------------------------------------------------
+// A DNS query/response cycle where the DNS server lives on a DIFFERENT subnet
+// from the client, so the query must be routed through R1 — demonstrating that
+// DNS is not a local-only protocol: a DNS query is an application-layer (L7)
+// message that rides inside UDP (L4) / IP (L3) and is routed across subnets
+// like any other IP traffic. Three nested layers are shown, each labelled with
+// its OSI layer: L2 frame (yellow) → L3/L4 packet (green) → DNS payload (blue).
+
+function buildDnsResolution(srcId: string, dstId: string): Scenario {
+  const src = getDevice(srcId)
+  const dst = getDevice(dstId)
+  const srcNic = primaryNic(srcId)
+  const dstNic = primaryNic(dstId)
+  const dnsSrvNic = primaryNic('dns-srv')
+  const srcSwitch = switchFor(srcId)
+  const dnsSwitch = switchFor('dns-srv')
+  const srcGateway = gatewayNic(srcId) // R1's NIC on the client's subnet
+  const dnsGateway = gatewayNic('dns-srv') // R1's NIC on the DNS server's subnet
+  const srcSubnet = subnetOf(srcId)
+  const dnsSubnet = subnetOf('dns-srv')
+  const hostname = `${dst.name.toLowerCase()}.example.com`
+
+  const queryPayload: DnsPayload = { question: hostname }
+  const responsePayload: DnsPayload = { question: hostname, answer: dstNic.ip }
+  const srvCache: DnsCacheView = {
+    deviceId: 'dns-srv',
+    entries: [{ hostname, ip: dstNic.ip!, ttl: 300 }],
+  }
+  const srcRoutingTable: RoutingTableView = {
+    deviceId: srcId,
+    entries: topology.subnets
+      .filter((s) => s.cidr !== srcSubnet.cidr)
+      .map((s) => ({
+        network: s.cidr,
+        gateway: srcGateway.ip ?? '',
+        isMatch: s.cidr === dnsSubnet.cidr,
+      })),
+  }
+  const srcArpTable: ArpTableView = {
+    deviceId: srcId,
+    entries: [{ ip: srcGateway.ip ?? '', mac: srcGateway.mac }],
+  }
+
+  const steps: Step[] = [
+    {
+      kind: 'callout',
+      narration: `${src.name} wants to connect to "${hostname}" but only knows the hostname, not the IP.`,
+      detail: 'Before sending any data, the client must resolve the hostname to an IP address — that is what DNS is for.',
+      sprite: null,
+      activeDevice: srcId,
+      dnsCache: { deviceId: srcId, entries: [] },
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'callout',
+      narration: `Checking local DNS cache… no entry found for "${hostname}".`,
+      detail: `${src.name} must ask the DNS Server at ${dnsSrvNic.ip} — which is on another subnet (${dnsSubnet.cidr}).`,
+      sprite: null,
+      dnsCache: { deviceId: srcId, entries: [] },
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'create',
+      narration: 'Building a DNS Query — an application-layer (Layer 7) message.',
+      detail: `It simply asks: "what is the IP for ${hostname}?" This L7 message is then wrapped in UDP (L4) and IP (L3).`,
+      sprite: { at: srcId, phase: 'packet', fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'callout',
+      narration: `${dnsSrvNic.ip} is not on ${src.name}'s subnet, so the query goes to the default gateway, R1.`,
+      detail: `Routing table: ${dnsSubnet.cidr} is reachable via ${srcGateway.ip}. The gateway's MAC (${srcGateway.mac}) is already in the ARP cache.`,
+      realization: true,
+      sprite: { at: srcId, phase: 'packet', fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: srcId,
+      routingTable: srcRoutingTable,
+      arpTable: srcArpTable,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `Encapsulating: DNS (L7) → UDP :53 (L4) → IP (L3) → an L2 frame addressed to the gateway.`,
+      detail: `L2 destination is R1's MAC (${srcGateway.mac}); the L3 destination is still the DNS Server (${dnsSrvNic.ip}).`,
+      sprite: { at: srcId, phase: 'frame', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves ${src.name} and travels to ${srcSwitch.name}.`,
+      sprite: { at: srcSwitch.id, phase: 'frame', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: srcSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${srcSwitch.name} forwards the frame to R1 (its ${srcGateway.ifname}).`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: 'r1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `R1 peels off the L2 frame to read the L3 destination IP.`,
+      detail: `The DNS payload (L7) and UDP header (L4) are untouched — R1 only needs the IP to route.`,
+      sprite: { at: 'r1', phase: 'decap', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: 'r1',
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `R1 routes to ${dnsSubnet.cidr} and re-encapsulates in a new L2 frame for that link.`,
+      detail: `New frame: FROM ${dnsGateway.mac} (R1's ${dnsGateway.ifname}) → TO ${dnsSrvNic.mac}. Same L7 DNS message, brand-new L2 framing.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: dnsGateway.mac, toMac: dnsSrvNic.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: 'r1',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame travels to ${dnsSwitch.name} on the DNS Server's subnet.`,
+      sprite: { at: dnsSwitch.id, phase: 'frame', fromMac: dnsGateway.mac, toMac: dnsSrvNic.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: dnsSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${dnsSwitch.name} forwards the frame to the DNS Server.`,
+      sprite: { at: 'dns-srv', phase: 'frame', fromMac: dnsGateway.mac, toMac: dnsSrvNic.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, udpPort: '53', dnsPayload: queryPayload },
+      activeDevice: 'dns-srv',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'inspect',
+      narration: `DNS Server reads the application-layer query and looks up its zone records.`,
+      detail: `Zone record found: "${hostname}" → ${dstNic.ip}`,
+      sprite: { at: 'dns-srv', phase: 'decap', fromMac: dnsGateway.mac, toMac: dnsSrvNic.mac, fromIp: srcNic.ip, toIp: dnsSrvNic.ip, dnsPayload: queryPayload },
+      activeDevice: 'dns-srv',
+      dnsCache: srvCache,
+      duration: INSPECT_MS,
+    },
+    {
+      kind: 'create',
+      narration: 'DNS Server builds a Response (Layer 7).',
+      detail: `The answer: ${hostname} is at ${dstNic.ip}.`,
+      sprite: { at: 'dns-srv', phase: 'packet', fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: 'dns-srv',
+      dnsCache: srvCache,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `${src.name} is remote too, so the Response is framed for the DNS Server's own gateway (R1).`,
+      detail: `Frame: FROM ${dnsSrvNic.mac} → TO ${dnsGateway.mac} (R1's ${dnsGateway.ifname}).`,
+      sprite: { at: 'dns-srv', phase: 'frame', fromMac: dnsSrvNic.mac, toMac: dnsGateway.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: 'dns-srv',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The Response leaves the DNS Server and travels to ${dnsSwitch.name}.`,
+      sprite: { at: dnsSwitch.id, phase: 'frame', fromMac: dnsSrvNic.mac, toMac: dnsGateway.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: dnsSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${dnsSwitch.name} forwards the Response to R1.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: dnsSrvNic.mac, toMac: dnsGateway.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: 'r1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `R1 peels off the frame and looks up ${srcNic.ip} in its routing table.`,
+      sprite: { at: 'r1', phase: 'decap', fromMac: dnsSrvNic.mac, toMac: dnsGateway.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: 'r1',
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `R1 routes back to ${srcSubnet.cidr} and re-frames the Response for ${src.name}.`,
+      detail: `New frame: FROM ${srcGateway.mac} (R1's ${srcGateway.ifname}) → TO ${srcNic.mac}.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: 'r1',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The Response travels to ${srcSwitch.name}.`,
+      sprite: { at: srcSwitch.id, phase: 'frame', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: srcSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${srcSwitch.name} forwards the Response to ${src.name}.`,
+      sprite: { at: srcId, phase: 'frame', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, udpPort: '53', dnsPayload: responsePayload },
+      activeDevice: srcId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${src.name} decapsulates all the way up to the DNS Response and caches the record.`,
+      detail: `"${hostname}" → ${dstNic.ip}, TTL 300 s. Next lookup hits the cache instantly.`,
+      sprite: { at: srcId, phase: 'decap', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dnsSrvNic.ip, toIp: srcNic.ip, dnsPayload: responsePayload },
+      activeDevice: srcId,
+      dnsCache: { deviceId: srcId, entries: [{ hostname, ip: dstNic.ip!, ttl: 300, isNew: true }] },
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'callout',
+      narration: 'DNS works across subnets, not just locally.',
+      detail: `The DNS Server was on a different subnet, yet the query reached it — because a DNS query is an application-layer (L7) message carried inside UDP/IP and routed by R1 like any other packet. In the real world your resolver (e.g. 8.8.8.8) is usually many hops away.`,
+      realization: true,
+      sprite: null,
+      dnsCache: { deviceId: srcId, entries: [{ hostname, ip: dstNic.ip!, ttl: 300 }] },
+      duration: HOLD_MS,
+    },
+  ]
+
+  return { srcId, dstId, steps: slowDown(steps) }
+}
+
+// --- DNS resolution then ping ------------------------------------------------
+// Extends dns-resolution: after the hostname→IP lookup, the client pings the
+// resolved host. The DNS query is always routed (the DNS server is remote),
+// but the ping itself depends on where the resolved host lives: routed through
+// R1 if it's on another subnet, or delivered directly PC→switch→PC if it's on
+// the client's own local subnet.
+
+function buildDnsThenPing(srcId: string, dstId: string): Scenario {
+  const src = getDevice(srcId)
+  const dst = getDevice(dstId)
+  const srcNic = primaryNic(srcId)
+  const dstNic = primaryNic(dstId)
+  const srcSwitch = switchFor(srcId)
+  const dstSwitch = switchFor(dstId)
+  const srcGateway = gatewayNic(srcId) // R1's NIC on the client's subnet
+  const dstGateway = gatewayNic(dstId) // R1's NIC on the receiver's subnet
+  const dstSubnet = subnetOf(dstId)
+  const pingLocal = subnetOf(srcId).cidr === dstSubnet.cidr
+  const hostname = `${dst.name.toLowerCase()}.example.com`
+
+  const dnsSteps = buildDnsResolution(srcId, dstId).steps
+  const cachedDnsCache: DnsCacheView = {
+    deviceId: srcId,
+    entries: [{ hostname, ip: dstNic.ip!, ttl: 300 }],
+  }
+
+  const REQ = 'ICMP Echo Request'
+  const REP = 'ICMP Echo Reply'
+
+  // Receiver on another subnet: the ping is routed PC → switch → R1 → switch → PC.
+  const routedIcmpSteps: Step[] = [
+    {
+      kind: 'callout',
+      narration: `Now ${src.name} sends an ICMP Echo Request to ${dst.name} at ${dstNic.ip}.`,
+      detail: `The IP came straight from the DNS cache. ${dstNic.ip} is on ${dstSubnet.cidr} — another subnet — so this ping is routed through R1, just like the DNS query was.`,
+      sprite: null,
+      dnsCache: cachedDnsCache,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'create',
+      narration: `${src.name} creates an ICMP Echo Request packet: FROM ${srcNic.ip} → TO ${dstNic.ip}.`,
+      sprite: { at: srcId, phase: 'packet', fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `The receiver is remote, so the frame is addressed to the gateway (R1).`,
+      detail: `L2: FROM ${srcNic.mac} → TO ${srcGateway.mac}. L3 destination stays ${dstNic.ip}.`,
+      sprite: { at: srcId, phase: 'frame', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame travels through ${srcSwitch.name} to R1.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: srcNic.mac, toMac: srcGateway.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: 'r1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `R1 routes to ${dstSubnet.cidr} and re-frames the packet for ${dst.name}.`,
+      detail: `New L2 frame: FROM ${dstGateway.mac} (R1's ${dstGateway.ifname}) → TO ${dstNic.mac}.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: dstGateway.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: 'r1',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame travels through ${dstSwitch.name} to ${dst.name}.`,
+      sprite: { at: dstId, phase: 'frame', fromMac: dstGateway.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: dstId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `${dst.name} decapsulates the frame and reads the ICMP Echo Request.`,
+      sprite: { at: dstId, phase: 'decap', fromMac: dstGateway.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: dstId,
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${dst.name} builds an ICMP Echo Reply: FROM ${dstNic.ip} → TO ${srcNic.ip}.`,
+      sprite: { at: dstId, phase: 'packet', fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: dstId,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `${src.name} is remote too, so ${dst.name} frames the reply for its gateway (R1).`,
+      sprite: { at: dstId, phase: 'frame', fromMac: dstNic.mac, toMac: dstGateway.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: dstId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The reply travels through ${dstSwitch.name} to R1.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: dstNic.mac, toMac: dstGateway.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: 'r1',
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `R1 routes back and re-frames the reply for ${src.name}.`,
+      sprite: { at: 'r1', phase: 'frame', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: 'r1',
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The reply travels through ${srcSwitch.name} to ${src.name}.`,
+      sprite: { at: srcId, phase: 'frame', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: srcId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: 'Round-trip complete.',
+      detail: 'DNS resolved the hostname to a remote IP. R1 routed both the query and the ping across subnets. The switches forwarded by MAC. Everything worked together across three subnets.',
+      realization: true,
+      sprite: { at: srcId, phase: 'decap', fromMac: srcGateway.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: srcId,
+      dnsCache: cachedDnsCache,
+      duration: DECAP_MS,
+    },
+  ]
+
+  // Receiver on the client's own subnet: the ping goes directly PC → switch → PC,
+  // with no router — the resolved IP is local, so no gateway is involved.
+  const localIcmpSteps: Step[] = [
+    {
+      kind: 'callout',
+      narration: `Now ${src.name} sends an ICMP Echo Request to ${dst.name} at ${dstNic.ip}.`,
+      detail: `The IP came straight from the DNS cache. ${dstNic.ip} is on ${src.name}'s own subnet, so this ping is delivered directly through ${srcSwitch.name} — no router needed.`,
+      sprite: null,
+      dnsCache: cachedDnsCache,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'create',
+      narration: `${src.name} creates an ICMP Echo Request packet: FROM ${srcNic.ip} → TO ${dstNic.ip}.`,
+      sprite: { at: srcId, phase: 'packet', fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: srcId,
+      duration: CREATE_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `The receiver is local, so the frame is addressed straight to ${dst.name}.`,
+      detail: `L2: FROM ${srcNic.mac} → TO ${dstNic.mac}.`,
+      sprite: { at: srcId, phase: 'frame', fromMac: srcNic.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: srcId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The frame leaves ${src.name} and travels to ${srcSwitch.name}.`,
+      sprite: { at: srcSwitch.id, phase: 'frame', fromMac: srcNic.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: srcSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${srcSwitch.name} forwards the frame straight to ${dst.name}.`,
+      sprite: { at: dstId, phase: 'frame', fromMac: srcNic.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: dstId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'decap',
+      narration: `${dst.name} decapsulates the frame and reads the ICMP Echo Request.`,
+      sprite: { at: dstId, phase: 'decap', fromMac: srcNic.mac, toMac: dstNic.mac, fromIp: srcNic.ip, toIp: dstNic.ip, payloadText: REQ },
+      activeDevice: dstId,
+      duration: DECAP_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: `${dst.name} builds an ICMP Echo Reply: FROM ${dstNic.ip} → TO ${srcNic.ip}.`,
+      sprite: { at: dstId, phase: 'packet', fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: dstId,
+      duration: HOLD_MS,
+    },
+    {
+      kind: 'encap',
+      narration: `${dst.name} frames the reply straight back to ${src.name}.`,
+      sprite: { at: dstId, phase: 'frame', fromMac: dstNic.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: dstId,
+      duration: ENCAP_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `The reply travels to ${srcSwitch.name}.`,
+      sprite: { at: srcSwitch.id, phase: 'frame', fromMac: dstNic.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: srcSwitch.id,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'travel',
+      narration: `${srcSwitch.name} delivers the reply to ${src.name}.`,
+      sprite: { at: srcId, phase: 'frame', fromMac: dstNic.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: srcId,
+      duration: TRAVEL_MS,
+    },
+    {
+      kind: 'deliver',
+      narration: 'Round-trip complete.',
+      detail: `DNS resolved the hostname across subnets (to the remote DNS server), but ${dst.name} turned out to be local — so the ping stayed on the subnet: PC → switch → PC, no router.`,
+      realization: true,
+      sprite: { at: srcId, phase: 'decap', fromMac: dstNic.mac, toMac: srcNic.mac, fromIp: dstNic.ip, toIp: srcNic.ip, payloadText: REP },
+      activeDevice: srcId,
+      dnsCache: cachedDnsCache,
+      duration: DECAP_MS,
+    },
+  ]
+
+  const icmpSteps = pingLocal ? localIcmpSteps : routedIcmpSteps
+
+  // dnsSteps come from buildDnsResolution already slowed down; only the ICMP
+  // steps still need scaling so the whole scenario runs at the same pace.
+  return { srcId, dstId, steps: [...dnsSteps, ...slowDown(icmpSteps)] }
+}
+
+export const dnsResolution: ScenarioDefinition = {
+  id: 'dns-resolution',
+  name: 'DNS resolution',
+  showLayer3: true,
+  usesDns: true,
+  build: buildDnsResolution,
+}
+
+export const dnsThenPing: ScenarioDefinition = {
+  id: 'dns-then-ping',
+  name: 'DNS resolution + ping',
+  showLayer3: true,
+  usesDns: true,
+  build: buildDnsThenPing,
+}
+
 /** All registered scenarios, in the order they should appear in a picker. */
 export const scenarios: ScenarioDefinition[] = [
   basicL2Transfer,
@@ -979,4 +1488,6 @@ export const scenarios: ScenarioDefinition[] = [
   localPingExchange,
   arpLearning,
   routingExample,
+  dnsResolution,
+  dnsThenPing,
 ]

@@ -135,6 +135,12 @@
   letter-spacing: 0.02em;
   color: var(--accent);
   opacity: 0.75;
+  white-space: nowrap;
+}
+/* Right-side subnets anchor their label to the region's outer (right) edge,
+   so it sits away from R1 instead of on top of it. */
+.lan-tag-right {
+  transform: translate(calc(-100% - 8px), -130%);
 }
 
 .nic-link-label {
@@ -542,6 +548,144 @@
   }
 }
 
+/* ======================================================== DNS cache ==== */
+
+.dns-cache {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  z-index: 6;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid #3b82f6;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+  min-width: 190px;
+  transition:
+    left 0.5s ease,
+    top 0.5s ease;
+}
+.dns-cache-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #1e40af;
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+.dns-cache-empty {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.dns-cache table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+.dns-cache th {
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  padding: 0 10px 3px 0;
+}
+.dns-cache td {
+  padding: 2px 10px 2px 0;
+  white-space: nowrap;
+}
+.dns-cache td.hostname {
+  color: #1e40af;
+  font-weight: 700;
+}
+.dns-cache td.ip {
+  color: var(--packet-green-ink);
+  font-weight: 700;
+}
+.dns-cache td.ttl {
+  color: var(--ink-faint);
+}
+.dns-cache tr.is-new td {
+  background: #dbeafe;
+  border-radius: 4px;
+  animation: dns-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes dns-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
+  }
+}
+
+/* DNS payload box — the third nested layer inside the L3 packet. Kept
+   semi-transparent (like the yellow frame / green packet) so it doesn't fully
+   hide the device cards and their IP/MAC labels underneath while travelling. */
+.dns-payload {
+  background: rgba(219, 234, 254, 0.4);
+  border: 1.5px solid rgba(59, 130, 246, 0.75);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+.dns-payload-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.dns-payload-tag {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.85);
+  color: #fff;
+  display: inline-block;
+}
+.dns-payload-line {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1e40af;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 5px;
+  padding: 3px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* OSI-layer chip — a small tag that names each nested box's layer, shown only
+   for DNS packets so the L2 → L3 → L4 → L7 stack is explicit. */
+.layer-chip {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.52rem;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+.l2-frame > .box-header .layer-chip {
+  color: var(--frame-yellow-ink);
+}
+.l3-packet > .box-header .layer-chip {
+  color: var(--packet-green-ink);
+}
+.layer-chip-app {
+  color: #1e40af;
+  background: #fff;
+}
 /* =================================================== Routing table ==== */
 
 .routing-table {

@@ -168,6 +168,16 @@ export const topology: Topology = {
       nics: [],
     },
     {
+      id: 'dns-srv',
+      kind: 'pc',
+      name: 'DNS Server',
+      // Lives in subnet 3 (192.168.1.0/24), deliberately remote from the
+      // subnet-1 clients — so a DNS query has to be routed through R1,
+      // demonstrating that DNS works across subnets, not just locally.
+      pos: { x: 1470, y: 1365 },
+      nics: [{ id: 'dns-srv-nic', mac: 'DD:DD:00', ip: '192.168.1.10' }],
+    },
+    {
       id: 'r1',
       kind: 'router',
       name: 'R1',
@@ -204,6 +214,7 @@ export const topology: Topology = {
     { id: 'l-h', a: 'pc-h', b: 'sw3' },
     { id: 'l-i', a: 'pc-i', b: 'sw3' },
     { id: 'l-r3', a: 'sw3', b: 'r1' },
+    { id: 'l-dns', a: 'dns-srv', b: 'sw3' },
   ],
 }
 
@@ -216,7 +227,7 @@ export function getDevice(id: string): Device {
 }
 
 /** The PCs a learner can pick as sender/receiver, in display order. */
-export const pcs: Device[] = topology.devices.filter((d) => d.kind === 'pc')
+export const pcs: Device[] = topology.devices.filter((d) => d.kind === 'pc' && d.id !== 'dns-srv')
 
 /** Primary NIC helper — the PCs' one NIC, or the router's eth0 (LAN) side. */
 export function primaryNic(deviceId: string): Nic {
@@ -267,9 +278,14 @@ export function routerNicForSwitch(switchId: string): Nic {
 /** All PCs across every subnet — the picker pool for the routing scenario. */
 export const routablePcs: Device[] = pcs
 
+/** PCs in subnet 1 — the client (sender) pool for DNS scenarios (the local network). */
+export const subnet1Pcs: Device[] = pcs.filter(
+  (d) => subnetOf(d.id).cidr === topology.subnets[0].cidr,
+)
+
 /**
- * The original single-subnet endpoint set (pc-a/b/c plus r1's eth0 side) —
- * the picker pool for the four subnet-1-only lessons, unchanged from before
- * the other subnets existed.
+ * The original single-subnet endpoint set (pc-a/b/c) —
+ * the picker pool for the four subnet-1-only lessons.
+ * dns-srv is excluded: it is a fixed role in DNS scenarios, not a user-selectable endpoint.
  */
-export const subnet1Endpoints: Device[] = neighborsOf('sw1')
+export const subnet1Endpoints: Device[] = neighborsOf('sw1').filter((d) => d.id !== 'dns-srv')

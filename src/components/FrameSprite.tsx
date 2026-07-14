@@ -62,6 +62,10 @@ export function FrameSprite({
   const displayToIp = sprite?.toIp ?? toIp
   const boxTag = sprite?.boxTag ?? 'L2 FRAME'
   const payloadText = sprite?.payloadText ?? 'Payload'
+  // OSI layer chips are drawn only for DNS packets, so every other scenario's
+  // frame/packet rendering is left exactly as it was.
+  const dns = sprite?.dnsPayload
+  const hasDns = !!dns
 
   const classes = [
     'frame-sprite',
@@ -88,6 +92,7 @@ export function FrameSprite({
       <div className="l2-frame">
         <div className="box-header">
           <span className="box-tag">{boxTag}</span>
+          {hasDns && <span className="layer-chip">L2 · Data Link</span>}
           <span className="addr">
             FROM <b>{displayFromMac}</b>
           </span>
@@ -100,7 +105,12 @@ export function FrameSprite({
           // Green Layer 3 packet — the payload inside.
           <div className="l3-packet">
             <div className="box-header">
-              <span className="box-tag">L3 PACKET</span>
+              <span className="box-tag">
+                {hasDns ? 'L3 · IP' : sprite.udpPort ? `UDP :${sprite.udpPort}` : 'L3 PACKET'}
+              </span>
+              {hasDns && sprite.udpPort && (
+                <span className="layer-chip">L4 · UDP :{sprite.udpPort}</span>
+              )}
               <span className="addr">
                 FROM <b>{displayFromIp}</b>
               </span>
@@ -108,7 +118,26 @@ export function FrameSprite({
                 TO <b>{displayToIp}</b>
               </span>
             </div>
-            <div className="packet-payload">{payloadText}</div>
+            {dns ? (
+              // Blue DNS payload box — the third nested layer, the L7 message.
+              // Kept to base info, like the ARP request/reply box: a tag, a
+              // layer chip, and one line stating the question (or the answer).
+              <div className="dns-payload">
+                <div className="dns-payload-head">
+                  <span className="dns-payload-tag">
+                    {dns.answer ? 'DNS RESPONSE' : 'DNS QUERY'}
+                  </span>
+                  <span className="layer-chip layer-chip-app">L7 · Application</span>
+                </div>
+                <div className="dns-payload-line">
+                  {dns.answer
+                    ? `${dns.question} = ${dns.answer}`
+                    : `${dns.question} = ?`}
+                </div>
+              </div>
+            ) : (
+              <div className="packet-payload">{payloadText}</div>
+            )}
           </div>
         ) : (
           // No packet at this point in the storyboard — just an opaque

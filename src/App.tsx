@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import { routablePcs, subnet1Endpoints, subnetOf } from './model/network'
+import {
+  routablePcs,
+  subnet1Endpoints,
+  subnet1Pcs,
+  subnetOf,
+} from './model/network'
 import { scenarios, type ScenarioDefinition } from './model/scenario'
 import { Lesson } from './components/Lesson'
 
-function poolFor(def: ScenarioDefinition) {
+// DNS scenarios: the client (sender) is a local subnet-1 PC, so its query to
+// the remote DNS server is always routed through R1. The resolved host
+// (receiver) can be any PC — local (same subnet) or remote (another subnet).
+function senderPoolFor(def: ScenarioDefinition) {
+  if (def.usesDns) return subnet1Pcs
+  return def.crossSubnet ? routablePcs : subnet1Endpoints
+}
+function receiverPoolFor(def: ScenarioDefinition) {
+  if (def.usesDns) return routablePcs
   return def.crossSubnet ? routablePcs : subnet1Endpoints
 }
 
@@ -36,12 +49,13 @@ function App() {
   const handleScenario = (id: string) => {
     setScenarioId(id)
     const def = scenarios.find((s) => s.id === id) ?? scenarios[0]
-    const pool = poolFor(def)
-    const nextSrc = pool.some((d) => d.id === srcId) ? srcId : pool[0].id
+    const srcPool = senderPoolFor(def)
+    const dstPool = receiverPoolFor(def)
+    const nextSrc = srcPool.some((d) => d.id === srcId) ? srcId : srcPool[0].id
     const nextDst =
-      pool.some((d) => d.id === dstId) && !conflicts(def, nextSrc, dstId)
+      dstPool.some((d) => d.id === dstId) && !conflicts(def, nextSrc, dstId)
         ? dstId
-        : (pool.find((d) => !conflicts(def, nextSrc, d.id))?.id ?? nextSrc)
+        : (dstPool.find((d) => !conflicts(def, nextSrc, d.id))?.id ?? dstPool[0].id)
     setSrcId(nextSrc)
     setDstId(nextDst)
   }
@@ -49,15 +63,15 @@ function App() {
   const handleSrc = (id: string) => {
     setSrcId(id)
     if (conflicts(scenarioDef, id, dstId)) {
-      const pool = poolFor(scenarioDef)
-      setDstId(pool.find((d) => !conflicts(scenarioDef, id, d.id))?.id ?? id)
+      const dstPool = receiverPoolFor(scenarioDef)
+      setDstId(dstPool.find((d) => !conflicts(scenarioDef, id, d.id))?.id ?? id)
     }
   }
   const handleDst = (id: string) => {
     setDstId(id)
     if (conflicts(scenarioDef, srcId, id)) {
-      const pool = poolFor(scenarioDef)
-      setSrcId(pool.find((d) => !conflicts(scenarioDef, id, d.id))?.id ?? id)
+      const srcPool = senderPoolFor(scenarioDef)
+      setSrcId(srcPool.find((d) => !conflicts(scenarioDef, id, d.id))?.id ?? id)
     }
   }
 
