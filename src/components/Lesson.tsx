@@ -43,7 +43,10 @@ export function Lesson({
 }: LessonProps) {
   const scenarioDef =
     scenarios.find((s) => s.id === scenarioId) ?? scenarios[0]
-  const otherSubnetsVisible = !!scenarioDef.crossSubnet || showOtherSubnets
+  // DNS scenarios put the server on a remote subnet, so the other subnets and
+  // the routing path through R1 must be visible for them too.
+  const otherSubnetsVisible =
+    !!scenarioDef.crossSubnet || !!scenarioDef.usesDns || showOtherSubnets
   const scenario = useMemo(
     () => scenarioDef.build(srcId, dstId),
     [scenarioDef, srcId, dstId],
@@ -75,9 +78,11 @@ export function Lesson({
           frameLabels={frameLabels}
           arpTable={currentStep?.arpTable ?? null}
           routingTable={currentStep?.routingTable ?? null}
+          dnsCache={currentStep?.dnsCache ?? null}
           broadcast={currentStep?.broadcast ?? null}
           revealed={revealed}
           showOtherSubnets={otherSubnetsVisible}
+          showDnsServer={!!scenarioDef.usesDns}
         />
       </main>
 

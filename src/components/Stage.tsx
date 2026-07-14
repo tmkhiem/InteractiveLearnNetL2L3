@@ -10,12 +10,14 @@ import {
 import type {
   ArpTableView,
   BroadcastStep,
+  DnsCacheView,
   RoutingTableView,
   SpriteState,
 } from '../model/scenario'
 import { ArpTable } from './ArpTable'
 import { BroadcastFrame } from './BroadcastFrame'
 import { DeviceCard } from './DeviceCard'
+import { DnsCache } from './DnsCache'
 import { FrameSprite } from './FrameSprite'
 import { RoutingTable } from './RoutingTable'
 
@@ -34,12 +36,16 @@ interface StageProps {
   arpTable: ArpTableView | null
   /** Routing table to show for the current step, or null to hide it. */
   routingTable: RoutingTableView | null
+  /** DNS cache to show for the current step, or null to hide it. */
+  dnsCache: DnsCacheView | null
   /** Broadcast fan-out to show for the current step, or null to hide it. */
   broadcast: BroadcastStep | null
   /** Fade the whole topology in on mount. */
   revealed: boolean
   /** Whether subnets 2 and 3 (and r1's eth1/eth2) are drawn at all. */
   showOtherSubnets: boolean
+  /** Whether the DNS Server device is drawn (only for DNS scenarios). */
+  showDnsServer: boolean
 }
 
 // r1's card is the same size as a PC/switch card (132px wide — see
@@ -102,9 +108,11 @@ export function Stage({
   frameLabels,
   arpTable,
   routingTable,
+  dnsCache,
   broadcast,
   revealed,
   showOtherSubnets,
+  showDnsServer,
 }: StageProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
@@ -160,6 +168,9 @@ export function Stage({
         ...neighborsOf(s.switchId).filter((d) => d.kind === 'pc').map((d) => d.id),
       ]),
   )
+  // The DNS Server sits in subnet 1 (always visible) but is only relevant to
+  // DNS scenarios — hide it everywhere else so it doesn't clutter the diagram.
+  if (!showDnsServer) hiddenDeviceIds.add('dns-srv')
   const visibleDevices = topology.devices
     .filter((d) => !hiddenDeviceIds.has(d.id))
     .map((d) =>
@@ -209,7 +220,12 @@ export function Stage({
   const PAD_BOTTOM = 90
   const regions = visibleSubnets.map((subnet) => {
     const switchDevice = getDevice(subnet.switchId)
-    const members = [switchDevice, ...neighborsOf(subnet.switchId).filter((d) => d.kind === 'pc')]
+    const members = [
+      switchDevice,
+      ...neighborsOf(subnet.switchId).filter(
+        (d) => d.kind === 'pc' && !hiddenDeviceIds.has(d.id),
+      ),
+    ]
     const xs = members.map((d) => d.pos.x)
     const ys = members.map((d) => d.pos.y)
     const x0 = Math.min(Math.min(...xs) - PAD_X, r1Pos.x)
@@ -279,18 +295,26 @@ export function Stage({
         ))}
       </svg>
 
-      {regions.map((region) => (
-        <div
-          key={region.cidr}
-          className="lan-tag"
-          style={{
-            left: `${(region.x / STAGE_WIDTH) * 100}%`,
-            top: `${(region.y / STAGE_HEIGHT) * 100}%`,
-          }}
-        >
-          {showLayer3 ? region.cidr : 'Local network'}
-        </div>
-      ))}
+      {regions.map((region) => {
+        // Each region stretches inward to r1's center, so its top-INNER corner
+        // sits right on the router. Anchor the label on the OUTER horizontal
+        // side (away from r1) so it never lands on R1's card. Regions centered
+        // above r1 (subnet 1) fall through to the left/default anchor.
+        const anchorRight = region.x + region.width / 2 > r1Pos.x + 1
+        const anchorX = anchorRight ? region.x + region.width : region.x
+        return (
+          <div
+            key={region.cidr}
+            className={`lan-tag ${anchorRight ? 'lan-tag-right' : ''}`}
+            style={{
+              left: `${(anchorX / STAGE_WIDTH) * 100}%`,
+              top: `${(region.y / STAGE_HEIGHT) * 100}%`,
+            }}
+          >
+            {showLayer3 ? region.cidr : 'Local network'}
+          </div>
+        )
+      })}
 
       {/* r1 NIC labels, positioned on top of their link so it's clear which
           physical link each interface belongs to. */}
@@ -349,6 +373,7 @@ export function Stage({
 
       <ArpTable view={arpTable} />
       <RoutingTable view={routingTable} />
+      <DnsCache view={dnsCache} />
     </div>
     </div>
   )
